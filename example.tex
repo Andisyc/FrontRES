@@ -67,17 +67,7 @@
 
 	% 实验展示了FrontRES能够提升GMT跟踪带噪参考帧的鲁棒性
 
-	One of the ultimate goals of embodied AI is humanoid "see-and-do": zero-shot physical execution of motions from in-the-wild videos without any offline dynamics solving. 
-	
-	However, kinematic sequences extracted from such videos inevitably contain visual artifacts—such as floating and high-frequency jitter—due to camera shake and monocular depth ambiguity. 
-	
-	Forcing a pre-trained policy to track these flawed references passively exhausts its hidden "robustness budget" merely to maintain balance, rendering the system highly fragile during actual sim-to-real deployment. 
-	
-	To address this, we propose FrontRES, a lightweight, online refiner inserted between the flawed reference and a frozen tracker, which outputs $\\Delta SE(3)$ spatial corrections on the fly. 
-	
-	To prevent dynamically infeasible over-corrections driven by a blind pursuit of zero kinematic error, FrontRES leverages an "Executable Reward" to internalize the tracker's performance boundaries, ensuring noise cancellation without compromising the tracker's inherent physical capabilities. 
-	
-	Experiments demonstrate that FrontRES significantly enhances the baseline tracker's robustness against noisy reference frames, enabling highly stable, zero-shot motion tracking.
+	Enabling humanoid robots with 'see-and-do' capability - zero-shot execution of motions from in-the-wild videos - is a central goal in embodied intelligence.However, kinematic sequences extracted from these videos inevitably carry artifacts: floating, jitter, and contact inconsistency. These artifacts drain the tracker's \textit{robustness budget} - its finite capacity to absorb sensing errors and real-world perturbations. When this budget is spent on artifacts, the robot becomes fragile under real-world disturbance. To address this, we propose FEMR (Front-End Motion Refiner), a lightweight module placed between flawed reference and frozen tracker. FEMR predicts per-frame $\Delta SE(3)$ corrections at runtime. Crucially, FEMR is trained with an executable reward that respects the tracker's physical limits, rather than blindly minimizing kinematic error. Experiments demonstrate that FEMR substantially improves tracking robustness against noisy references, enabling stable zero-shot execution.
 \end{abstract}
 
 % Two or three meaningful keywords should be added here
@@ -114,17 +104,9 @@
 
 	% 相比之下，互联网视频包含更丰富的极限动作和交互动作，是更具扩展性的参考动作来源
 
-	Enabling humanoid robots with open-world motion abilities is an important goal in embodied intelligence. % 我更偏向enabling xxx with这种句式，然后我想表达开放世界的通用运动能力，能与下面几句遥相呼应
+	Enabling humanoid robots with open-world motion capabilities is a central goal in embodied intelligence. Benefiting from recent advances in general motion tracking~\cite{}, humanoid robots can now track diverse reference motions through a unified low-level controller~\cite{}, without per-skill retraining.
 	
-	Benefiting from recent advances in motion tracking, humanoid robots can now track diverse reference motions with a unified low-level controller. % 我认为Benefited from句式更好，并且我想表达motion tracking领域的进展
-	
-	As a result, the bottleneck is shifting. The key question is no longer only whether a tracker can execute a clean and physically consistent reference motion. % 我想表达问题不再是控制器能否稳定顺滑得执行参考动作这一概念，但我又怕与后文我们提出的控制器不能稳定执行带噪动作相互冲突
-	
-	It is also whether we can obtain reference motions that are both diverse and reliable.
-	
-	Traditional MoCap data provides good physical consistency, but it is costly to collect and limited in motion coverage. 
-	
-	In contrast, Internet videos contain richer extreme motions and interactive behaviors, making them a more scalable source of reference motions.
+	As a result, the bottleneck is shifting. The key question is no longer only whether a controller can execute a given reference motion stably---it is also whether we can obtain reference motions that are both diverse and reliable enough to begin with. Traditional motion capture provides physically consistent data with clean calibration, but it is expensive to collect and limited in motion coverage. In contrast, Internet videos span a far richer space of extreme motions and interactive behaviors, making them a more scalable source of reference motions.
 	
 	%%%
 	% 第 2 段：野外视频恢复出的参考动作并不是控制器可直接执行的参考轨迹
@@ -146,15 +128,7 @@
 	
 	% 当跟踪器被迫执行这些参考动作时，机器人会更容易失去稳定性
 
-	However, 3D human motions recovered from in-the-wild videos are not prepared for closed-loop physical control. % reference trajectories在这里冗余了，表达上不够连贯
-	
-	Monocular estimation, camera shake, human reconstruction, and robot retargeting can all introduce reference-frame artifacts. % 再加入"甚至拍摄者自身的抖动"
-	
-	These artifacts include root floating or penetration, foot sliding, orientation errors, and contact timing mismatch. % 朝向抖动是什么？是否改成朝向错误更好？
-	
-	Reference-frame artifacts can be subtle in visual space. However, these artifacts directly change the physical conditions used by the controller, such as contact, support, and body balance. % 我不喜欢they这个指代，很不清晰，并且center-of-mass motion不太易懂
-	
-	Tracking such references leaves less room for the robot to recover from disturbances. % 这句很简洁但依然有点AI味，不够native speaker
+	However, 3D human motions recovered from in-the-wild videos are not ready-to-use references for closed-loop physical control. They are visual estimates, not physically validated trajectories. Camera shake, monocular depth ambiguity, human pose reconstruction~\cite{}, and robot retargeting~\cite{} all introduce reference-frame artifacts: root floating or penetration, foot sliding, orientation errors, and contact timing mismatch. Such artifacts can be subtle in visual space---a pose may look plausible frame by frame. In physical space, however, these artifacts directly corrupt the signals that controllers depend on: contact states, support relationships, and body balance. When a tracker is forced to follow flawed references, the robot becomes substantially more vulnerable to disturbances.
 	
 	%%%
 	% 第 3 段：提出“鲁棒性预算”视角，说明伪影为什么致命
@@ -178,19 +152,7 @@
 	
 	% 这说明参考帧伪影本身会削弱跟踪器抵抗扰动的能力
 
-	This creates a kinematic-to-dynamic gap. % 这句有点生硬，不够自然流利
-	
-	The gap describes the mismatch between kinematic plausibility and dynamic executability. 
-	
-	A reference motion can look natural in pose space, yet still be difficult for a physical robot to execute stably. 
-	
-	This mismatch consumes the robustness budget of the tracker. 
-	
-	As shown in Fig.~\ref{fig:robustness-budget}, the robot's stability margin after external pushes decreases as reference-frame noise increases.
-	
-	The end-to-end success rate of the whole motion also drops. 
-	
-	These results show that reference-frame artifacts can directly weaken the tracker's ability to resist disturbances.
+	We characterize this mismatch as a \textit{kinematic-to-dynamic gap}: a reference motion can appear natural in pose space yet still be difficult for a physical robot to execute stably. This gap is not merely a qualitative intuition---it directly consumes what we call the \textit{robustness budget} of the tracker. Every low-level controller has a finite capacity to absorb sensing errors, modeling noise, and external perturbations. When reference-frame artifacts already occupy part of that budget, less remains for handling real-world disturbances. A diagnostic experiment (Fig.~\ref{fig:robustness-budget}) confirms this: as root reference noise increases, the robot's post-push stability margin drops monotonically, and the end-to-end success rate of the full motion sequence declines accordingly.
 	
 	%%%
 	% 第 4 段：提出解决方案应当满足的要求
@@ -222,25 +184,7 @@
 
 	% 它的目标不是让参考动作在视觉上更像人，而是让参考动作更容易被冻结跟踪器执行
 
-	A suitable solution should satisfy four requirements. 
-	
-	First, the solution should preserve the tracker rather than replace or retrain it. % 这句表述不够自然，应当表达应当不干扰tracker本身，直接写placed before the tracker就像直接告诉读者我们要做个前置修正器一样
-	
-	The low-level tracker has already learned complex dynamic control abilities. % structures最好改成ability
-	
-	Combining reference repair with motion control mixes two different problems. % 我发现你很喜欢使用it，但这样很容易导致指代不清，读者不知道这个it在说什么，并且这句也很生硬
-	
-	Second, the solution should be online and lightweight. 
-	
-	The correction should run without offline dynamics optimization or a new trajectory solve for each video. % 同样的问题，表述生硬
-	
-	Third, the solution should target spatial artifacts in the reference motion. 
-	
-	Errors in root height, body orientation, and horizontal displacement can be corrected at the frame level. 
-	
-	In contrast, contact timing mismatch usually requires sequence-level temporal alignment, which is not the goal of this work. % 我都不知道有无motion rhythm这个词，我认为这个表达不太正确
-	
-	Finally, the solution should be tracker-aware. The goal is not to make the reference motion look more human-like, but to make the reference motion easier for the frozen tracker to execute. % 同样的问题，its goal太生硬了
+	A suitable solution should satisfy four requirements. First, it should be placed before the tracker rather than replace or retrain it. Modern trackers already encode complex dynamic control capabilities~\cite{}; asking the same module to simultaneously repair upstream errors and handle downstream dynamics conflates two distinct problems. Second, it should be online and lightweight, requiring no offline trajectory optimization or per-video dynamics solving. Third, it should target spatial artifacts---errors in root height, body orientation, and horizontal displacement---that can be corrected at the per-frame level, rather than contact timing misalignment which demands sequence-level temporal realignment. Fourth, it should be \textit{tracker-aware}: the objective is not to make the reference look more human-like, but to make it easier for the frozen tracker to execute.
 	
 	%%%
 	% 第 5 段：介绍 FEMR
@@ -266,19 +210,7 @@
 
 	% 当参考帧伪影破坏跟踪稳定性时，FEMR 应输出有效修正
 
-	To address this problem, we propose FEMR, a front-end motion refiner placed between corrupted reference motions and a frozen motion tracker. 
-	
-	FEMR is not a new motion tracker. FEMR only applies lightweight corrections before the reference motion enters the frozen tracker. % 应当说FEMR不是一个新的motion tracker，不要使用learn a new controller这种表达，这种表达很明显不正确
-	
-	Specifically, FEMR predicts a task-space $\Delta SE(3)$ correction for each reference frame at runtime. 
-	
-	FEMR also predicts separate confidence values for position and orientation corrections. 
-	
-	These confidence values allow FEMR to control when to correct, which dimensions to correct, and how strong the correction should be. 
-	
-	When the reference motion is already executable, FEMR should keep the input unchanged. 
-	
-	When reference-frame artifacts reduce tracking stability, FEMR should output effective corrections.
+	We propose FEMR (Front-End Motion Refiner), a lightweight module inserted between corrupted reference motions and a frozen tracker. FEMR is not a new motion tracker. Instead, it predicts per-frame task-space $\Delta SE(3)$ corrections---residual adjustments to root translation and orientation---gated by separate confidence scores for position and orientation. These confidence scores give FEMR a critical property: it defaults to restraint. When the reference motion is already executable, FEMR keeps the input unchanged. When artifacts threaten stability, FEMR outputs corrections just large enough to restore executability, without overshooting into dynamically infeasible commands. To learn this behavior, FEMR is trained with a tracker-aware executable reward that measures whether a correction actually improves physical execution, rather than merely reducing kinematic error.
 	
 	%%%
 	% 第 6 段：贡献列表
@@ -298,24 +230,27 @@
 	
 	% 我们通过扰动恢复实验验证了参考帧误差对跟踪稳定性的影响，并展示了 FEMR 对受污染参考动作的修复效果
 
-	In summary, our contributions are four-fold. 
-	
-	First, we formulate artifacts in video-based reference motions as a kinematic-to-dynamic gap in general motion tracking, and analyze their effect through the robustness budget. 
-	
-	Second, we propose FEMR, an online and lightweight front-end motion refiner that improves the executability of corrupted reference motions while keeping the low-level tracker frozen. 
-	
-	Third, we design tracker-aware executability objectives for training FEMR. These objectives encourage FEMR to remain inactive on clean references and correct corrupted references only when correction improves execution.
-	
-	Finally, we conduct disturbance recovery experiments to evaluate reference-frame errors and FEMR. The results show that reference-frame errors reduce tracking stability, and FEMR improves the execution of corrupted reference motions.
+	In summary, our contributions are:
+
+	\begin{enumerate}
+		\item We formulate reference-frame artifacts as a \textit{kinematic-to-dynamic gap} in general motion tracking, and introduce the \textit{robustness budget} to analyze how upstream reference quality governs downstream tracking stability.
+
+		\item We propose FEMR, an online lightweight front-end refiner that keeps the tracker frozen, predicts per-frame task-space corrections gated by confidence scores, and is trained with a tracker-aware executable reward.
+
+		\item Through disturbance recovery experiments, we show that reference-frame noise systematically degrades tracking stability, and that FEMR restores executability without modifying the underlying tracker.
+	\end{enumerate}
 
 %===============================================================================
 
 \section{Related Works}
 
+\subsection{General Motion Tracking for Humanoids}
 
 
+\subsection{From In-the-Wild Videos to Reference Motions}
 
 
+\subsection{Residual Learning and Sim-to-Real Adaptation}
 
 %===============================================================================
 
