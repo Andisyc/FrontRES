@@ -4,7 +4,7 @@
 % \usepackage[final]{corl_2026} % Uncomment for the camera-ready ``final'' version.
 % \usepackage[preprint]{corl_2026} % Uncomment for pre-prints (e.g., arxiv); This is like ``final'', but will remove the CORL footnote.
 
-\title{Formatting Instructions for CoRL 2026 Camera-Ready}
+\title{FEMR: Front-End Motion Refinement for Robust Motion Tracking}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -55,17 +55,275 @@
 %===============================================================================
 
 \begin{abstract}
-    The purpose of this document is to provide both the basic paper template and submission guidelines. Abstracts should be a single paragraph, between 4--6 sentences long, ideally. Gross violations will trigger corrections at the camera-ready phase.
+    % 具身智能的终极目标之一, 是赋予人形机器人类似人类的 "即看即做" (See-and-do) 能力: 即直接在物理世界中零样本（Zero-shot）执行互联网或真实世界中的未知视频中的动作，而无需任何离线动力学解算
+
+	% 但当我们试图直接部署从野外视频（In-the-wild videos）中提取的动作序列时，由于相机抖动与单目深度歧义，视觉工具链提取出的运动学序列不可避免地带有浮空与高频跃迁等视觉伪影
+
+	% 任何预训练的底层控制策略都拥有一个隐形的鲁棒性预算. 然而, 如果游参考动作充满伪影，Tracker就会被动耗尽预算去强行维持平衡, 导致其在真实的 Sim-to-Real 部署中变得极其脆弱
+
+	% 为了解决这个问题, 我们在缺陷参考轨迹和冻结的Tracker之间插入了一个轻量级的在线修正模块FrontRES. FrontRES在执行期会输出Delta SE对参考帧进行即时修正.
+
+	% Moreover, 为了防止盲目追求“误差清零”而输出超出动力学承受极限的过度修正，FrontRES 通过“可执行奖励（Executable Reward）”精准学习了底层追踪器的性能边界，确保输出的修正量能抵消噪声的同时不反向破坏Tracker原有的物理执行能力
+
+	% 实验展示了FrontRES能够提升GMT跟踪带噪参考帧的鲁棒性
+
+	One of the ultimate goals of embodied AI is humanoid "see-and-do": zero-shot physical execution of motions from in-the-wild videos without any offline dynamics solving. 
+	
+	However, kinematic sequences extracted from such videos inevitably contain visual artifacts—such as floating and high-frequency jitter—due to camera shake and monocular depth ambiguity. 
+	
+	Forcing a pre-trained policy to track these flawed references passively exhausts its hidden "robustness budget" merely to maintain balance, rendering the system highly fragile during actual sim-to-real deployment. 
+	
+	To address this, we propose FrontRES, a lightweight, online refiner inserted between the flawed reference and a frozen tracker, which outputs $\\Delta SE(3)$ spatial corrections on the fly. 
+	
+	To prevent dynamically infeasible over-corrections driven by a blind pursuit of zero kinematic error, FrontRES leverages an "Executable Reward" to internalize the tracker's performance boundaries, ensuring noise cancellation without compromising the tracker's inherent physical capabilities. 
+	
+	Experiments demonstrate that FrontRES significantly enhances the baseline tracker's robustness against noisy reference frames, enabling highly stable, zero-shot motion tracking.
 \end{abstract}
 
 % Two or three meaningful keywords should be added here
-\keywords{CoRL, Robots, Learning} 
+\keywords{Robots, Learning} 
 
 %===============================================================================
 
 \section{Introduction}
+
+    % 1、宏大愿景与数据范式 (The Paradigm)
+	% 2、提出矛盾：“伪影”的致命性 (The Artifact Crisis)
+	% 3、提出理论：“鲁棒性预算” (The Robustness Budget)
+	% 4、提出需求: (The Requirements)
+	% 5、提出方案：FEMR 的优雅架构 (Introducing FEMR)
+	% 6、贡献列表 (Summary of Contributions)
 	
-    Submission to CoRL 2026 will be entirely electronic, via a web site (not email). Information about the submission process and \LaTeX{} templates are available on the conference web site at \url{https://corl.org/}. For camera ready submission, use the \texttt{final} option for the \texttt{\textbackslash usepackage} command. 
+	%%%
+	% 第 1 段：通用运动追踪器改变了问题的瓶颈
+	% 1、提出长期愿景：人形机器人不应只执行手工设计的技能，而应能复用开放世界中的人类动作。
+	% 2、保留“得益于现代通用运动追踪器的飞速发展”这一表述，低层控制器可以跟踪多样的参考动作
+	% 3、指出瓶颈转移：问题不再只是“控制器能不能完成动作”，而变成“有无多样且可靠的参考动作”
+	% 4、引出野外视频：互联网视频包含极限动作和交互动作，比传统 MoCap 更丰富
+	%%%
+
+	% 赋予人形机器人复现开放世界人类动作的能力，是具身智能的重要目标之一
+	
+	% 得益于现代通用运动追踪器的发展，人形机器人已经能够通过统一的底层控制器跟踪多样的参考动作
+
+	% 因此，限制机器人动作能力的瓶颈正在发生变化
+
+	% 问题不再只是控制器能否完成给定动作，而是能否获得足够多样且可靠的参考动作
+
+	% 传统 MoCap 数据具有较好的物理一致性，但采集成本高，动作覆盖范围有限
+
+	% 相比之下，互联网视频包含更丰富的极限动作和交互动作，是更具扩展性的参考动作来源
+
+	Enabling humanoid robots with open-world motion abilities is an important goal in embodied intelligence. % 我更偏向enabling xxx with这种句式，然后我想表达开放世界的通用运动能力，能与下面几句遥相呼应
+	
+	Benefiting from recent advances in motion tracking, humanoid robots can now track diverse reference motions with a unified low-level controller. % 我认为Benefited from句式更好，并且我想表达motion tracking领域的进展
+	
+	As a result, the bottleneck is shifting. The key question is no longer only whether a tracker can execute a clean and physically consistent reference motion. % 我想表达问题不再是控制器能否稳定顺滑得执行参考动作这一概念，但我又怕与后文我们提出的控制器不能稳定执行带噪动作相互冲突
+	
+	It is also whether we can obtain reference motions that are both diverse and reliable.
+	
+	Traditional MoCap data provides good physical consistency, but it is costly to collect and limited in motion coverage. 
+	
+	In contrast, Internet videos contain richer extreme motions and interactive behaviors, making them a more scalable source of reference motions.
+	
+	%%%
+	% 第 2 段：野外视频恢复出的参考动作并不是控制器可直接执行的参考轨迹
+	% 1、指出核心困难：从单目或互联网视频中恢复出的三维人体运动，本质上只是视觉估计结果
+	% 2、伪影类型：相机运动、深度歧义、人体重建和机器人重定向会带来根节点浮空/穿地、滑步、抖动等问题
+	% 3、这些错误不是普通的视觉噪声，因为它们直接改变了接触、支撑和质心运动等控制器依赖的物理条件
+	% 4、若强迫 tracker 跟踪这样的类人但接触和支撑并不自洽的轨迹；Tracker会在扰动下更容易摔倒
+	%%%
+
+	% 然而，从野外视频中恢复出的三维人体动作并不是为闭环物理控制准备的参考轨迹
+
+	% 单目估计、人体重建和机器人重定向都会引入参考帧伪影
+	
+	% 这些伪影包括根节点浮空或穿地、脚步滑移、朝向抖动和接触时序不一致
+	
+	% 它们在视觉上可能并不明显
+	
+	% 但是，它们会直接改变接触、支撑和质心运动等物理条件
+	
+	% 当跟踪器被迫执行这些参考动作时，机器人会更容易失去稳定性
+
+	However, 3D human motions recovered from in-the-wild videos are not prepared for closed-loop physical control. % reference trajectories在这里冗余了，表达上不够连贯
+	
+	Monocular estimation, camera shake, human reconstruction, and robot retargeting can all introduce reference-frame artifacts. % 再加入"甚至拍摄者自身的抖动"
+	
+	These artifacts include root floating or penetration, foot sliding, orientation errors, and contact timing mismatch. % 朝向抖动是什么？是否改成朝向错误更好？
+	
+	Reference-frame artifacts can be subtle in visual space. However, these artifacts directly change the physical conditions used by the controller, such as contact, support, and body balance. % 我不喜欢they这个指代，很不清晰，并且center-of-mass motion不太易懂
+	
+	Tracking such references leaves less room for the robot to recover from disturbances. % 这句很简洁但依然有点AI味，不够native speaker
+	
+	%%%
+	% 第 3 段：提出“鲁棒性预算”视角，说明伪影为什么致命
+	% 1、我们用一个简单诊断实验揭示这种参考帧误差的后果
+	% 2、当根节点参考噪声增加时，受到推力后 ZMP margin 会下降
+	% 3、增加扰动强度会导致整段动作的 end-to-end success rate 下降
+	% 4、说明参考帧伪影会消耗 tracker 的鲁棒性预算
+	%%%
+
+	% 我们将这一问题称为 Kinematic-to-Dynamic Gap
+	
+	% 它描述了运动学合理性和动力学可执行性之间的失配
+	
+	% 一个参考动作可以在姿态空间中看起来自然，却仍然难以被物理机器人稳定执行
+	
+	% 这种失配会消耗跟踪器的鲁棒性预算
+	
+	% 如 Fig.~\ref{fig:robustness-budget} 所示，随着参考帧噪声增大，机器人在外部推力后的稳定裕度持续下降
+	
+	% 整段动作的 end-to-end success rate 也随之降低
+	
+	% 这说明参考帧伪影本身会削弱跟踪器抵抗扰动的能力
+
+	This creates a kinematic-to-dynamic gap. % 这句有点生硬，不够自然流利
+	
+	The gap describes the mismatch between kinematic plausibility and dynamic executability. 
+	
+	A reference motion can look natural in pose space, yet still be difficult for a physical robot to execute stably. 
+	
+	This mismatch consumes the robustness budget of the tracker. 
+	
+	As shown in Fig.~\ref{fig:robustness-budget}, the robot's stability margin after external pushes decreases as reference-frame noise increases.
+	
+	The end-to-end success rate of the whole motion also drops. 
+	
+	These results show that reference-frame artifacts can directly weaken the tracker's ability to resist disturbances.
+	
+	%%%
+	% 第 4 段：提出解决方案应当满足的要求
+	% 1、合适的方法需要满足三个条件：
+	% 2、放在 tracker 前，而不是改 tracker；
+	% 3、在线轻量，不依赖离线动力学解算；
+	% 4、tracker-aware，目标是提升可执行性，而不是让动作看起来更像人。
+	%%%
+
+	% 一个合适的解决方案应当满足三个条件
+
+	% 首先，它应当放在跟踪器之前，而不是替换或重训跟踪器
+
+	% 底层跟踪器已经学习到复杂的动力学控制结构
+
+	% 让它同时承担参考修复和运动控制，会混合两个不同的问题
+
+	% 其次，该方法应当在线且轻量
+
+	% 它不能依赖离线动力学优化，也不能为每段视频重新求解控制轨迹
+
+	% 然后，它应当针对参考动作中的空间伪影
+	
+	% 根节点高度、身体朝向和水平位移误差可以在单帧层面被修正
+	
+	% 相比之下，接触时序错位和动作节奏错误通常需要重新对齐整段动作，这并不是本文的目标
+
+	% 最后，该方法应当是 tracker-aware
+
+	% 它的目标不是让参考动作在视觉上更像人，而是让参考动作更容易被冻结跟踪器执行
+
+	A suitable solution should satisfy four requirements. 
+	
+	First, the solution should preserve the tracker rather than replace or retrain it. % 这句表述不够自然，应当表达应当不干扰tracker本身，直接写placed before the tracker就像直接告诉读者我们要做个前置修正器一样
+	
+	The low-level tracker has already learned complex dynamic control abilities. % structures最好改成ability
+	
+	Combining reference repair with motion control mixes two different problems. % 我发现你很喜欢使用it，但这样很容易导致指代不清，读者不知道这个it在说什么，并且这句也很生硬
+	
+	Second, the solution should be online and lightweight. 
+	
+	The correction should run without offline dynamics optimization or a new trajectory solve for each video. % 同样的问题，表述生硬
+	
+	Third, the solution should target spatial artifacts in the reference motion. 
+	
+	Errors in root height, body orientation, and horizontal displacement can be corrected at the frame level. 
+	
+	In contrast, contact timing mismatch usually requires sequence-level temporal alignment, which is not the goal of this work. % 我都不知道有无motion rhythm这个词，我认为这个表达不太正确
+	
+	Finally, the solution should be tracker-aware. The goal is not to make the reference motion look more human-like, but to make the reference motion easier for the frozen tracker to execute. % 同样的问题，its goal太生硬了
+	
+	%%%
+	% 第 5 段：介绍 FEMR
+	% 第 1 句：提出方法：FrontRES 是插入缺陷参考流和冻结 GMT 之间的前端残差修正器
+	% 第 2 句：说明执行形式：在执行期，FrontRES 为每个参考帧预测 Δ SE(3) 修正和置信度
+	% 第 3 句：强调核心设计：FEMR 不盲目把运动学误差清零，而是提高冻结 tracker 的可执行度
+	% 第 4 句：说明训练信号：为此，FEMR 使用 executable reward 提升Tracker的可执行性
+	%%%
+
+	% 为了解决这一问题，我们提出 FEMR，一个放置在缺陷参考动作和冻结运动跟踪器之间的前端运动修正器
+
+	% FEMR 不学习新的底层控制器
+
+	% 它只在参考动作进入跟踪器之前进行轻量修正
+
+	% 具体来说，FEMR 在执行时为每个参考帧预测任务空间中的 $\Delta SE(3)$ 修正量
+
+	% 同时，FEMR 预测位置和姿态修正的置信度
+
+	% 这种设计使 FEMR 能够控制何时修正、修正哪些维度以及修正幅度
+
+	% 当参考动作已经可执行时，FEMR 应保持输入不变
+
+	% 当参考帧伪影破坏跟踪稳定性时，FEMR 应输出有效修正
+
+	To address this problem, we propose FEMR, a front-end motion refiner placed between corrupted reference motions and a frozen motion tracker. 
+	
+	FEMR is not a new motion tracker. FEMR only applies lightweight corrections before the reference motion enters the frozen tracker. % 应当说FEMR不是一个新的motion tracker，不要使用learn a new controller这种表达，这种表达很明显不正确
+	
+	Specifically, FEMR predicts a task-space $\Delta SE(3)$ correction for each reference frame at runtime. 
+	
+	FEMR also predicts separate confidence values for position and orientation corrections. 
+	
+	These confidence values allow FEMR to control when to correct, which dimensions to correct, and how strong the correction should be. 
+	
+	When the reference motion is already executable, FEMR should keep the input unchanged. 
+	
+	When reference-frame artifacts reduce tracking stability, FEMR should output effective corrections.
+	
+	%%%
+	% 第 6 段：贡献列表
+	% 第 1 句：贡献 1：将参考帧伪影表述为通用运动追踪中的 Kinematic-to-Dynamic Gap
+	% 第 2 句：贡献 2：提出一个轻量在线前端修正器，在保持 GMT 冻结的同时避免离线动力学解算
+	% 第 3 句：贡献 3：提出 tracker-aware executable reward 和鲁棒性预算诊断用于训练
+	% 第 4 句：贡献 4：进行了实验验证FEMR的有效性
+	%%%
+
+	% 本文的贡献如下
+
+	% 我们将视频参考动作中的伪影表述为通用运动追踪中的 Kinematic-to-Dynamic Gap，并从鲁棒性预算的角度分析其影响
+
+	% 我们提出 FEMR，一个在线轻量的前端运动修正器。该方法在保持底层跟踪器冻结的同时，提高缺陷参考动作的可执行性
+
+	% 我们提出 tracker-aware 的可执行性优化项设计，使 FEMR 学习何时保持不变以及何时输出有效修正
+	
+	% 我们通过扰动恢复实验验证了参考帧误差对跟踪稳定性的影响，并展示了 FEMR 对受污染参考动作的修复效果
+
+	In summary, our contributions are four-fold. 
+	
+	First, we formulate artifacts in video-based reference motions as a kinematic-to-dynamic gap in general motion tracking, and analyze their effect through the robustness budget. 
+	
+	Second, we propose FEMR, an online and lightweight front-end motion refiner that improves the executability of corrupted reference motions while keeping the low-level tracker frozen. 
+	
+	Third, we design tracker-aware executability objectives for training FEMR. These objectives encourage FEMR to remain inactive on clean references and correct corrupted references only when correction improves execution.
+	
+	Finally, we conduct disturbance recovery experiments to evaluate reference-frame errors and FEMR. The results show that reference-frame errors reduce tracking stability, and FEMR improves the execution of corrupted reference motions.
+
+%===============================================================================
+
+\section{Related Works}
+
+
+
+
+
+
+%===============================================================================
+
+\section{Method}
+
+
+
+
 
 %===============================================================================
 

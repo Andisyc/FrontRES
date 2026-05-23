@@ -1,0 +1,517 @@
+\UseRawInputEncoding
+\pdfoutput=1
+\documentclass{article}
+\usepackage{spconf}
+\usepackage{color}
+\usepackage{xcolor}
+\usepackage{epsfig}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{pifont}
+\usepackage{bbding}
+\usepackage{threeparttable}
+\usepackage{subfigure}
+\usepackage{dashrule}
+\usepackage{arydshln}
+\usepackage{boldline}
+
+%\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage[french,boxed,vlined,linesnumbered,inoutnumbered,rightnl]{algorithm2e}
+
+\let\OLDthebibliography\thebibliography
+\renewcommand\thebibliography[1]{
+  \OLDthebibliography{#1}
+  \setlength{\parskip}{0pt}
+  \setlength{\itemsep}{0pt plus 0.3ex}
+}
+
+\pagestyle{empty}
+\begin{document}\sloppy
+
+\def\x{{\mathbf x}}
+\def\L{{\cal L}}
+
+\title{Scale Margin Loss for Object Detection}
+\name{Anonymous ICME Submission
+%Yuxuan Cheng$^1$, Yanjun Zhang$^2$, Leo Yu Zhang$^3$, Donglong Chen$^{1\dagger}$\thanks{$^{\dagger}$Corresponding author: Donglong Chen}
+}
+\address{
+%$^1$ Guangdong Provincial Key Laboratory of IRADS, BNU-HKBU United International College;\\ 
+%$^2$ School of Computer Science, University of Technology Sydney;\\
+%$^3$ School of Information and Communication Technology, Griffith University;\\
+%$^4$ Jiangxi University of Finance and Economics;\\
+}
+
+\maketitle
+
+\begin{abstract}
+%
+% 使用自然数据训练的检测器通常会遭受尺度不均衡问题. 不同尺度的目标的收敛速度不同. 我们观察到这种收敛差异会让检测器陷入次优泛化区域. 为了解决这个问题, 我们提出尺度边距函数, 通过增加一系列的正则化项统一不同尺度目标的泛化行为. 我们分别使用了单步和双步检测器在两个流行的目标检测数据集上测试了方法的有效性. 实验展示了我们方法的有效性.
+%
+Object detection models trained on natural data often face challenges with scale imbalance, where objects of different sizes provide varying levels of useful features. 
+Larger objects typically contain richer and more detailed information, while smaller objects often lack sufficient distinctive features and are more prone to being overwhelmed by background noise during training. 
+This imbalance can push models into suboptimal learning states. While the model effectively captures meaningful features from larger objects, it may overfit to irrelevant or noisy features when attempting to learn from smaller objects. 
+%Objects from different scale have different level of useful features. Such differences cause detectors falling into suboptimal regions. 
+To address this issue, we proposed a scale margin loss motivated by slowing down models' learning speed for small objects. By adding a set of regularization terms, our scale margin loss reduced useless features model learned from small objects, making the model's overall generalization ability closer to the optimal. We tested our method with the state-of-the-art object detection models %both one-stage and two-stage detectors 
+on two benchmarking datasets. The experiments demonstrate the effectiveness of our methods with 1.42\%+ Average Precision on MS COCO and 3.37\%+ Small Object Average Precision on VOC. Codes are available at https://github.com/AnonymitySubmit/ScaleMargin.
+\end{abstract}
+
+\begin{keywords} 
+Object detection, scale imbalance, margin-based loss function.
+\end{keywords}
+
+\section{Introduction}
+\label{section_1}
+
+% {交代研究背景} 目标检测在计算机视觉中具有重要地位和许多应用场景, 比如人脸识别, 行人重定位, 无人机检测, etc. 然而, 从自然世界收集的数据经常让检测器展现出尺度不均衡问题. 这会导致目标检测在实际应用中的性能退化. 
+
+Object detection plays a crucial role in computer vision, with applications ranging from facial recognition and person re-identification to aerial photography. However, detectors trained on real-world data often struggle with the scale imbalance problem, which can significantly degrade their performance in practical applications. 
+
+% 一些研究者认为边框级不均衡和特征级不均衡是导致尺度不均衡的原因. 在目标检测器中, 大目标相比小目标总能产生更多的预测框和损失值, 导致对小目标的次优优化. (尺度不均衡问题: 不同尺度拥有的目标数量不同导致某些尺度缺少目标但神经网络不具有尺度不变性; 大目标拥有更多特征导致更容易泛化并且需要更长时间学习而小目标更难泛化且学习时间更短) 大目标让检测器花费更多时间训练并且更容易泛化. Box-level imbalance refers to different scale have the different number of objects, resulting in a lack of objects at certain scales.
+
+Recent research identifies that both box-level and feature-level imbalances~\cite{oksuz2020imbalance} contribute to the scale imbalance problem. 
+Box-level imbalance occurs when objects of different scales are unevenly distributed, leading to a shortage of objects at specific scales.
+Feature-level imbalance means that larger objects have more useful features, leading to longer training time and better generalization performance.
+
+% {介绍前人工作} 为了解决这个问题, 一个通用的直觉是为小目标增加表征能力或者优化强度. 现有工作可以分为几个方向: 网络结构设计, 数据增强, 损失函数设计, 生成范式. 特征金字塔通过构造多尺度表征提升多尺度目标的精度. Trident和POD为多尺度目标构造尺度不变分支. Perceptual GAN通过生成小目标的超分辨率表征为小目标引入新特征. Mosaic通过构造图片的多尺度表征增加网络对多尺度目标的训练效果. DST通过降低图片的平均尺度来增强小目标的表征能力. Scale Adaptive和Scale Balance通过为小目标损失值乘以系数来提升网络对小目标的优化效果. 
+
+% Existing works can be categorized into several strategies: neural network design, generative paradigm, data augmentation, and loss function design.
+
+A generic intuition addressing the box-level imbalance is to enhance the models' representation ability. The feature pyramid~\cite{lin2017feature, liu2018path, ghiasi2019fpn} constructs multi-level representations to improve model performance across multi-scale objects. TridentNet~\cite{li2019scale} and POD~\cite{peng2019pod} introduce scale-invariant branches to handle multi-scale objects more effectively. Mosaic~\cite{bochkovskiy2020yolov4} improves multi-scale object performance by creating college fashion images. DST~\cite{chen2020dynamic} improves small objects performance by reducing the average scale of these college fashion images.
+
+\begin{figure}[!hbpt]
+\centering
+\includegraphics[width=\linewidth]{figure/enlarge.png}
+\caption{An image from VOC \textit{train2007}. Although both objects belong to the \textit{person} class, large object in \textcolor{blue}{blue box}  have significantly more features than small object in \textcolor{red}{red box}.}
+\label{enlarge}
+\end{figure}
+
+% {指出前人不足, 并说清工作是正交还是改进} 尽管已经取得进展, 特征层级不均衡还没有被充分研究. 现有的尺度向数据增强和损失函数的设计均将小目标看作难样本由于小目标通常来说缺乏特征, 容易被背景掩盖, 因此尝试通过提升小目标的损失值, 提升小目标的优化力度来学习更容易区分的特征. 基于以上思考, 我们进一步考虑了通过施加更大的正则化力度来降低其与大目标达到最佳泛化时间的不一致.
+
+Despite significant progress in addressing the box-level imbalance problem, feature-level imbalance has not been fully studied. 
+As shown in Fig.~\ref{enlarge}, 
+%Existing scale-wise data augmentations, like DST~\cite{chen2020dynamic}, and scale-wise loss functions, like Scale Adaptive loss~\cite{lv2020small} and Scale Balance loss~\cite{shuang2021scale}, consider 
+small objects are easily overwhelmed by the background due to the lack of useful features. 
+As a result, while the model is still capturing features for large objects, it often begins to overfit irrelevant features for small objects, leading to degraded performance. %degradation on small objects. 
+
+In this work, we aim to improve performance by reducing the influence of irrelevant features learned by the model at various scales. 
+To achieve this, we maintain elevated loss values for small objects, which incentivizes the model to learn more discriminative features. 
+In particular, we propose a scale margin loss which adds a set of regularization terms to adjust the margin for objects across scales, slowing down converging speed of smaller objects. 
+This approach ensures that the model continues to extract meaningful features from large objects while mitigating overfitting to irrelevant features from small objects. 
+%that while the model continues to extract useful features from large objects, it avoids overfitting to irrelevant features from small objects. 
+
+%they attempt to learn more discriminative features by maintaining high loss value for small objects. Based on these thinking, we further consider to improve performance by reducing useless features the model learned across scale. 
+
+% {介绍自己方法} 本文我们提出了边距损失函数, 通过延长小目标的收敛时间. 大目标通常有更长的收敛时间而小目标收敛时间更短. 当模型的总体泛化性能达到最佳点时, 大目标的泛化性能还未达到最佳点而小目标的泛化性能已经超过最佳点. 导致网络总体的泛化性能无法接近理论最优点. 为了解决这个问题, 我们提出为不同尺度的目标施加一组正则化项, 减慢小目标收敛的收敛速度. 通过这样我们可以让网络的总体泛化性能尽可能接近最优点. 
+
+%In this paper, we proposed a scale margin loss motivated by slowing the model's learning speed toward useless features across scale. Large objects normally have more useful features whereas smaller objects have less useful features. When the model's overall generalization performance reaching optimal, there are still some useful features left in large objects for the model to learn while the model already learned too much useless features from small objects. Resulting the model's overall generalization performance falling into suboptimal. To address this issue, we proposed to add a set of regularization term for objects' margin across scale, slowing down smaller objects' converge speed. By doing so, we can make the model's overall generalization performance closer to the optimal.
+
+% {列举自己贡献} 我们提出了尺度边距函数. 我们提出了尺度间全局衰减控制器. 我们使用两种检测器在两个数据集上验证了方法的有效性.
+
+In summary, our contributions are two-fold:
+
+\begin{itemize}
+    \item We proposed a scale margin loss motivated by reducing the influence of irrelevant features learned by the model. Furthermore, we proposed a controller to adjust the regularization strength in the training. So we can find the suitable regularization strength.
+    \item We evaluated the effectiveness of our methods on COCO and VOC using Faster R-CNN and YOLOX, respectively. Our method achieved improvements of +1.42\% and +1.18\% \textit{Average Precision} on Faster R-CNN-101, and +3.37\% and +0.19\% \textit{Small Object Average Precision} on YoloX-S, compared to baseline and state-of-the-art methods, all under the 0.5 IoU threshold.
+\end{itemize}
+
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
+
+\section{Related Work}
+\label{section_2}
+
+% {介绍两个方向，尺度向增强技术与边距损失函数设计，点名现有尺度增强技术的缺陷是静态方法，强度在整个训练过程中保持不变；现有边距损失函数设计的问题是全部针对类别不均衡问题，没有考虑尺度不均衡问题}
+
+\subsection{Scale Imbalance Problem}
+
+% 现有解决尺度不均衡问题的方法主要有数据增强和损失函数设计. 数据增强系列方法的核心直觉是使用重采样构造更丰富的尺度变化. Image Pyramid方法比如SNIP和SNIPER希望通过构造多尺度的输入减少训练集和测试集之间的尺度偏移, 但这类Image Pyramid方法会对测试阶段造成巨大计算负担. Multi Scale增强方法比如RICAP和Mosaic被开发出来在训练阶段提供多尺度目标, 但Multi Scale数据增强忽略了不同尺度所需优化强度的差异. Dynamic Scale Training通过控制器调整数据增强启动的时机, 为更难优化的尺度提供了更多优化强度. 
+
+Existing methods to address the scale imbalance problem focused on data augmentation and loss function design. Data augmentation aims to create richer scale variations. For instance, Image Pyramid methods, such as SNIP~\cite{singh2018analysis} and SNIPER~\cite{singh2018sniper}, construct multi-scale inputs but incur heavy computation burden. 
+Multi-Scale augmentation techniques, such as RICAP~\cite{takahashi2018ricap} and Mosaic~\cite{bochkovskiy2020yolov4}, introduce multi-scale training but ignore the different optimization requirements for different scales. Dynamic Scale Training~\cite{chen2020dynamic} takes a step further, providing extra optimization strength for small objects by reducing the average scale of images.
+
+% 损失函数设计系列方法的核心直觉是赋予小目标更多的权重进行优化. Focal Loss通过降低well trained目标的损失值防止难样本被简单样本淹没. Scale Adaptive使用每批次内小目标与大目标的数量作为权重, Scale Balance使用不同尺度目标的Pred框数量作为权重. However, 这些方法在训练中的强度都保持不变, 也没法区分同尺度内的well trained和lack trained样本. 
+
+The core intuition behind loss function design methods is to assign more weight to small objects during optimization. Focal Loss~\cite{lin2017focal} prevents easy sample overwhelming hard samples by 
+decreasing the loss contribution of well-trained objects.
+%reducing the loss value of well-trained objects. 
+%Scale Adaptive~\cite{lv2020small} uses the ratio of small objects within each batch as weights, while Scale Balance~\cite{shuang2021scale} uses prediction box number as weights.
+Scale Adaptive~\cite{lv2020small} adjusts weights based on the ratio of small objects in each batch, whereas Scale Balance~\cite{shuang2021scale} assigns weights according to the number of predicted bounding boxes.
+However, these methods maintain a constant weighting strategy throughout training and cannot distinguish between well-trained and poorly trained samples within the same scale.
+
+\subsection{Margin Based Loss Function}
+
+% Margin Principle已经被很多方法证明有效. Large Margin Softmax被提出强迫网络学习到的特征具有类内的紧凑性和类间可分离性. LDAM展示了增加少类和多类间的边距可以提升泛化性能. Asymmetric Margin Loss通过将决策边界推向背景来提升前景的分割效果. 然而, 这些方法都是针对类不均衡问题, 据我们所知, 从没边距向的方法针对尺度不均衡问题.
+
+The margin principle has proven to be effective in numerous areas, including metric learning, facial recognition, and class imbalance. Large Margin Softmax~\cite{liu2016large} was proposed to enforce the feature learned by the model to have intra-class compactness and inter-class separability. LDAM~\cite{cao2019learning} demonstrated that generalization performance can be improved by increasing the margin between minor classes and major classes. Asymmetric Margin Loss~\cite{li2020analyzing} enhanced segmentation performance for foreground classes by pushing the decision boundary toward the background class. However, these methods are all focused on the class imbalance problem. To our best knowledge, no margin-based approach has yet been applied to tackle the scale imbalance problem.
+
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
+
+\begin{figure*}[!hbpt]
+    \subfigure[Scale Accuracy on the Test Set.]{
+        \begin{minipage}[t]{0.5\textwidth}
+        \hspace*{-0.45cm}
+	    \includegraphics[width=\textwidth]{figure/test_accuracy.png}
+        \end{minipage}
+    }
+    \subfigure[Scale Margin on the Train Set.]{
+        \begin{minipage}[t]{0.5\textwidth}
+        \hspace*{-0.35cm}
+	    \includegraphics[width=\textwidth]{figure/train_margin.png}
+        \end{minipage}
+    }
+
+	\caption{Scale-wise average precisions on VOC \textit{test2007} and average margins on VOC based on the YoloX-S. The object scale follows the MSCOCO definition: s $\in [0, 32^2]$, m $\in [32^2, 96^2]$, l $\in [96^2, \infty]$.}
+	\label{fig:problem_setup_1}
+\end{figure*}
+
+% 观察必须足够直觉, 否则会被attack, 整个出发点从收敛时间出发, 结合Fig 1b, motivate方法的rational
+
+% 观察能展现的是不同尺度存在收敛时间上的差异, 因此降低小目标的收敛速度来延长其收敛时间
+
+\section{Methodology}
+\label{section_3}
+
+\subsection{Problem Setup}
+\label{section_3_1}
+
+% 我们遵循LDAM中的定义, 定义模型为f, 定义x为输入图片, y为输入标签, 定义margin为正确类logit减去最大错误类logit. 假设一个尺度有v个目标, 定义一个尺度的平均边距为如下公式所示.
+
+Let $x$ denote an input object and $y$ the corresponding label. Following LDAM's~\cite{cao2019learning} definition, we consider a dataset $\{(x_i, y_i)\}_{i=1}^n$ where we divide all objects into $n$ scale intervals. For a model $f:\mathbb{R}^d \rightarrow \mathbb{R}^q$ that outputs a $q$ number of logits, the margin of an object $(x, y)$ is defined as the distance between the correct logit value and the largest incorrect logit: %, as shown in Equation~\ref{margin}:
+%
+\begin{align}
+\label{margin}
+\gamma(x,y) = f(x)_y - \max_{z\neq y} f(x)_z.
+\end{align}
+
+Assuming that the $i$-th scale has $v$ number of objects, we define the average margin of the $i$-th scale, $\Bar{\gamma_i}$, as follows:  
+\begin{align}
+\label{avg_magn}
+\Bar{\gamma}_i  = \frac{1}{v} \sum_{j= 1}^v \gamma_{ij}(x_{ij},y_{ij}).
+\end{align}
+Clearly, $\Bar{\gamma_i}$ represents the Euclidean distances between the $i$-th scale objects and the decision boundary~\cite{liu2016large}.
+The larger the margin values, the better the model learns toward objects.
+
+Average precision (AP) is one of the most popular performance evaluation metrics, calculated by averaging all precision values of one class or category over an IoU threshold. Assuming a category $C$ with $n_{c}$ number of objects, the AP of the category $C$ is defined as: % Equation~\ref{avg_precision}:
+\begin{equation}
+\label{avg_precision}
+\centering
+\begin{split}
+AP_{C} & = \frac{1}{n_{c}} \sum_{j= 1}^{n_{c}} \textnormal{Precision}_{j}, 
+\end{split}
+\end{equation}
+where $\textnormal{Precision} = {TP}/({TP+FP})$.
+% 从自然世界收集来的数据天然展现丰富的尺度变化. 目标拥有的特征随尺度的下降而减少. 这导致现有过参数化网络很容易过拟合小目标.
+
+Data collected from the natural world often exhibit rich scale variation, in which object feature reduces as scale decrease. 
+This phenomenon makes over-parameterized networks prone to overfitting small objects.
+%This makes it easy for an existing over-parameter network to overfit small objects. 
+Without losing generality, we calculated scale-wise $AP_{i}$ and $\Bar{\gamma_{i}}$ on VOC, where $i \in [s, m, l]$ under 0.5 IoU threshold. Then we made two observations:
+% 如图所示, 网络在测试集的小目标上的精度在90轮次后就不再持续上涨了, 而中目标与大目标的精度在200轮和230轮才停止上涨. 然而在训练集中, 所有尺度的平均边距在整个训练过程中递增, 尽管有些震荡.
+%
+\begin{enumerate}
+    \item \textit{Different Best Generalization Time Across Scales}:
+    As shown in Fig.~\ref{fig:problem_setup_1} (a), on the test set, the accuracy of small objects $AP_{s}$ starts to oscillate at 90 epoch, while the accuracy of the middle objects $AP_{m}$ and the accuracy of large objects $AP_{l}$ continues to increase until 190 epoch and 230 epoch. 
+    \item \textit{Smaller Objects' Margin Gap Continues to Increase}:
+    As shown in Fig.~\ref{fig:problem_setup_1} (b), the average margin gap $\Bar{\gamma}_{train} - \Bar{\gamma}_{test}$ of small objects and middle objects continues to increase throughout the training. In contrast, large objects' test set average margin remains relatively close to its' average train set margin. 
+\end{enumerate}
+
+% 更大的目标通常拥有更多的有用特征. for example, 对于人这个类别来说, 更大的目标的脸部, 躯干, 四肢的细节特征通常更丰富, 这导致大目标很容易被检测器与背景区分开, 其不仅在训练集上的边距更大, 也通常有较好的泛化性能.
+
+Large objects usually have more useful features. Taking \textit{ person} class as an example, large objects tend to have more details about face, torso, and limbs, causing large objects to be distinguished by detectors from the background  easier than smaller objects. As shown in Fig.~\ref{fig:problem_setup_1}, large objects not only have a larger margin on the train set, but also have better generalization performance on the test set.
+%
+% 作为对比, 小目标通常有用特征更少并且更难被检测器从背景中区分. 因为这个原因, 现代过参数化的网络非常容易拟合到无用特征, 这导致小目标在训练集上的边距持续增加, 而在测试集上的边距却几乎保持不变. 这种现象暗示了一系列的正则化项的缺失. 
+%
+In contrast, smaller objects normally have less useful features and are relatively indistinguishable from background for detectors. Moreover, modern over-parameter networks are very easy to fit useless features like noise from smaller objects. 
+As a result, the average training set margin for smaller objects continues to increase, while their average test set margin remains nearly unchanged. 
+%Resulting smaller objects' average train set margin continue increasing while its' average test set margin nearly remain unchanged. 
+This phenomenon implies a set of missing regularization terms across scale.
+
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
+%Leo Zhang 23-Dec
+\subsection{Scale Margin Loss}
+\label{section_3_2}
+
+% 先把你的核心方法说清楚, 再用理论去支撑你的方法; 核心方法立足点是否make sense, 立足点是否匹配方法
+
+% 为了解决这个问题, 我们提出为尺度向目标使用一系列的正则化项. 更小目标会接受更强的正则化力度, 因为更小的目标收敛时间更早. 通过降低更小目标的收敛速度, 我们可以延长小目标的收敛时间. 使得不同的尺度就能尽可能得同时收敛. 提升网络的最佳泛化能力, 在达到最佳总体泛化性能时
+
+To address the problem above, we propose to add a set of regularization terms $\delta_i$ for object margins across different scales during training. Smaller objects will receive more regularization strength. Following cross entropy loss, our scale margin loss $\L_{scm}$ is defined as:
+%
+\begin{equation}
+\label{scale_margin}
+\centering
+\begin{split}
+\L_{scm}(x_{i},y_{i}) & = - \log \frac{e^{z_{iy}-\delta_{i}}}{e^{z_{iy}-\delta_{i}} + \sum_{j\neq y} e^{z_{ij}}}, \\
+\end{split}
+\end{equation}
+where $i \in \{1,\dots, n\}, j \in \{1,\dots, q\}$.
+% {对公式的解释, 与前文的区别, 与Reweighting的区别, 点名调参问题}
+Here, $n$ denotes the total scale number, $q$ denotes the total class number, and $z_i=f(x_i)$ denotes the output logits of an object from $i$-th scale. 
+
+% 与Reweighting方法相比, 我们的方法细粒度更高, 因为我们依赖网络的输出logis, 而Reweighting的方法只依赖尺度划分. 但问题仍然存在, 如何为每个尺度选取更合适的δ值. 
+
+Compared to reweighting-based methods, our scale margin loss is more fine-grained. Our scale margin loss depends on the object logits output by the model, whereas reweighting-based methods only depend on scale partitioning. 
+
+\subsection{Regularization Strength Controller}
+\label{section_3_3}
+
+% 尽管我们拥有了尺度边距函数, 但问题仍然存在, 我们仍然需要寻找具体的正则化值. 从直觉上分析, 我们知道δ的值应当随尺度增加而减小, 但我们仍然需要寻找一个合适的δs作为初始值. 为了更好得选取δs的值, 我们首先在其他方法上进行测试. 我们设计了一个控制器调整其他方法为小目标提供的增强强度. 让不同尺度目标施加的额外优化力度随训练而减少, 如公式所示.
+Intuitively, we understand that $\delta_{i}$ should decrease as the size of the object increases. %However, we still have to find an appropriate value $\delta_{i}$ for each scale in the training. 
+%To address this issue, we 
+Therefore, we designed a controller $\delta^{t}_{i} = f(t, \delta^{0}_{i})$ to adjust the extra regularization strength for the $i$-th scale, reducing the extra regularization strength in training: %, as shown in Equation~\ref{exp_decay}:
+%
+\begin{equation}
+\label{exp_decay}
+\centering
+\begin{split}
+f(t, \delta^{0}_{i}) &= \delta^{0}_{i} \times (\frac{1 - \delta^{T}_{i}}{1 - e^{-2}} \times (1 - e^{\frac{-2}{T} (T-t)}) + \delta^{T}_{i}), \\
+\end{split}
+\end{equation}
+where $t$ denotes the current iteration number, and $T$ denotes the maximum iteration number. $\delta^{0}_{i}$ and $\delta^{T}_{i}$ are the starting value and the final value of the $i$-th scale $\delta_{i}$ in training.
+
+% 解释为啥要设计一个衰减的控制器: 因为为每个尺度设置一个合适的参数非常困难, 因为我们先设置一个相对较大的参数, 让其在训练中衰减, 这样就算较大的参数也能取得提升.
+
+% 解释delta为啥需要随着训练衰减, [如果不随训练衰减, 可能导致由于施加的正则化强度过强而降低网络性能], [我们希望在训练开始时保持较大的正则化力度, 然后随着训练衰减, 通过这种方式在训练末期让目标进入更低点]
+Determining an appropriate value for $\delta_{i}$ is inherently challenging. To address this,
+it is very hard to directly find a proper $\delta_{i}$ for the $i$-th scale. Therefore, we keep a relatively large $\delta^{0}_{i}$ at the beginning of the training, then leverage the controller to decay the regularization term $\delta^{t}_{i}$ until the end of the training. In  this way, we can prevent the model from suffering from excessive regularization strength and reaching a lower point on the loss landscape.
+
+% -------------------------------------------------------------------
+% -------------------------------------------------------------------
+
+\begin{table*}[!htbp]
+	\begin{center}
+		\small
+		\caption{Comparison results on COCO and VOC.}
+        \label{main_table}
+        \renewcommand\arraystretch{1.2}
+		\scalebox{0.9}{
+			\begin{tabular}{c|c|c|c|c|c|c|c|c|c|c|c|c|c}
+				\toprule
+
+                \multicolumn{2}{c|}{} & AP & AP$_{50}$ & AP$_{75}$ & AP$_{s}$ & AP$_{m}$ & AP$_{l}$ & AP & AP$_{50}$ & AP$_{75}$ & AP$_{s}$ & AP$_{m}$ & AP$_{l}$ \\
+
+                \midrule
+    
+                \multirow{1}{*}{Model} & \multirow{1}{*}{Method} & \multicolumn{6}{c|}{ResNet-50} & \multicolumn{6}{c}{ResNet-101} \\
+
+                \midrule
+                
+                \multirow{5}{*}{Faster-RCNN}  & Baseline                           & 30.39 & 49.20 & 32.27 & 16.11 & 32.66 & 39.97 & 32.27 & 51.08 & 34.74 & 17.37 & 35.06 & 42.31 \\ \cline{2-2}
+                
+                                            & LDAM~\cite{cao2019learning}          & 30.33 & 49.16 & 31.99 & 16.28 & 32.67 & 39.61 & 32.32 & 51.34 & 34.87 & 17.73 & 34.97 & 42.23 \\ \cline{2-2}
+
+                                            & Scale Adaptive~\cite{lv2020small}    & 29.41 & 47.48 & 31.11 & 15.20 & 31.08 & 38.48 & 31.35 & 49.71 & 33.69 & 16.39 & 33.89 & 42.04 \\ \cline{2-2}
+
+                                            & Scale Balance~\cite{shuang2021scale} & 30.87 & 49.68 & 33.25 & 16.46 & 33.32 & 40.18 & 32.65 & 51.32 & 35.00 & \textbf{18.10} & 35.50 & 42.60 \\ \cline{2-2}
+
+                                            & \textbf{Scale Margin}                & \textbf{31.39} & \textbf{50.57} & \textbf{33.64} & \textbf{16.51} & \textbf{34.19} & \textbf{40.70} & \textbf{33.36} & \textbf{52.50} & \textbf{35.75} & 17.85 & \textbf{36.27} & \textbf{43.56} \\
+                
+                \midrule
+
+                \multirow{1}{*}{Model} & \multirow{1}{*}{Method} & \multicolumn{6}{c|}{YoloX-S} & \multicolumn{6}{c}{YoloX-L} \\
+
+                \midrule
+                
+                \multirow{5}{*}{YoloX} & Baseline                             & 54.86 & 77.84 & \textbf{60.04} & 40.80 & 67.51 & 85.09 & 60.91 & 81.34 & 65.93 & 46.89 & 70.58 & 86.76 \\ \cline{2-2}
+            
+                                       & LDAM~\cite{cao2019learning}          & \textbf{55.12} & 77.93 & 59.83 & 40.21 & 67.11 & 85.22 & 58.84 & 80.52 & 64.93 & 46.39 & 70.29 & 86.01 \\ \cline{2-2}
+
+                                       & Scale Adaptive~\cite{lv2020small}    & 54.85 & 77.81 & 59.94 & 40.91 & 67.08 & \textbf{85.38} & \textbf{60.71} & 80.71 & \textbf{66.24} & 45.91 & 70.33 & 86.68 \\ \cline{2-2}
+
+                                       & Scale Balance~\cite{shuang2021scale} & 55.01 & 78.02 & 59.94 & 43.98 & 66.77 & 85.25 & 60.13 & 80.82 & 64.88 & 46.65 & 69.69 & 86.76 \\ \cline{2-2}
+
+                                       & \textbf{Scale Margin}                & 55.03 & \textbf{78.34} & 60.00 &\textbf{44.17} & \textbf{67.58} & 85.08 & 60.64 & \textbf{81.37} & 65.58 & \textbf{47.30} & \textbf{70.66} & \textbf{86.86} \\
+
+                \bottomrule
+            \end{tabular}}
+	\end{center}
+\end{table*}
+
+\section{Experiments}
+\label{section_4}
+\subsection{Experimental Settings}
+\label{section_4_1}
+
+% 我们使用了双步检测器Faster-RCNN和单步检测器YoloX在COCO和VOC上验证了我们所提出的方法的有效性. 我们遵循COCO数据集的尺度划分方式, 小目标为0~32^2, 中目标为32^2~96^2, 大目标为96^2~∞. 
+
+We tested our methods on two-stage (Faster-RCNN~\cite{ren2016faster}) and one-stage (YoloX~\cite{ge2021yolox}) detectors using MS COCO~\cite{lin2014microsoft} and Pascal VOC~\cite{everingham2010pascal} datasets.
+
+\noindent \textbf{Evaluation Metrics} We evaluate $AP$, $AP_{50}$ and $AP_{75}$ for overall performance, refering to the mean average precision of all objects with all, 0.5, and 0.75 IoU thresholds. We evaluated $AP_{s}$, $AP_{m}$, and $AP_{l}$ for small, middle, and large object performance under the 0.5 IoU threshold. Following COCO definitions, $s \in [0, 32^2]$, $m \in [32^2, 96^2]$, $l \in [96^2, \infty]$.
+
+\noindent \textbf{Comparison Methods} Apart from baseline, we compare our method with two scale-wise augmentation loss, Scale Adaptive~\cite{lv2020small} and Scale Balance~\cite{shuang2021scale}, and a margin-based class-wise loss LDAM~\cite{cao2019learning}. Scale Adaptive used the large and small object number ratio in each batch for reweighting, whereas Scale Balance leveraged the predict box number for reweighting. LDAM improves minor class performance by adjusting the margin between different classes based on sample ratios.
+
+\noindent \textbf{Hyper-Parameters} For regularization terms $\delta_i$ where $i \in \{s, m, l\}$, we simply set $\delta_{s}$ = 1, $\delta_{m}$ = 0.5, $\delta_{l}$ = 0.25 in experiments. For the controller, we set $\delta^{T}_{i}$ as 0. For Faster-RCNN, we use SGD with learning rate as 0.02 and weight decay as 5e-4. The learning rate scheduler is \textit{WarmupCosineLR} and the maximum iteration is 90000. For YoloX, we use SGD with learning rate of 0.01 and weight decay as 5e-4. The learning rate scheduler is \textit{YoloxWarmcos} and the maximum epoch is 250.
+
+\begin{figure*}[!hbpt]
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_0.png}
+        \end{minipage}
+    }
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_1.png}
+        \end{minipage}
+    }
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_2.png}
+        \end{minipage}
+    }
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_3.png}
+        \end{minipage}
+    }
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_4.png}
+        \end{minipage}
+    }
+    \subfigure{
+        \begin{minipage}[t]{0.33\textwidth}
+	    \includegraphics[width=\textwidth]{scatter/test_distribution_5.png}
+        \end{minipage}
+    }
+
+	\caption{The distribution of small object prediction logits on the VOC \textit{test2007}. The \textcolor[HTML]{D2AA3A}{yellow line} is the decision boundary where y-axis equals to x-axis. The \textcolor[HTML]{1C6AB1}{blue line} is the limitation of current group small objects on the baseline. On the upper left side of the decision boundary, the object is correctly classified, whereas the object is classified incorrectly on the lower right side of the decision boundary.}
+	\label{fig:visualization}
+\end{figure*}
+
+\begin{table}[!hbpt] % 
+\begin{center}
+	\small
+	\caption{Controller of Scale Margin Loss on VOC.}
+    \renewcommand\arraystretch{1.2}
+	\scalebox{0.9}{
+		\begin{tabular}{c|c|c|c|c|c|c}
+			\toprule
+    
+            \multicolumn{1}{c|}{Parameters} & \multicolumn{1}{c|}{AP} & \multicolumn{1}{c|}{AP$_{50}$} & \multicolumn{1}{c|}{AP$_{75}$} & \multicolumn{1}{c|}{AP$_{s}$}  & \multicolumn{1}{c|}{AP$_{m}$} & \multicolumn{1}{c}{AP$_{l}$} \\
+                
+            \midrule
+            $\delta_{s}$=3, $\delta_{m}$=0, $\delta_{l}$=0 & 54.98 & 78.01 & 59.81 & 42.94 & 66.81 & 85.19 \\ \cline{1-1}
+
+            + Controller & 55.03 & 78.24 & 59.76 & 42.43 & 68.03 & 85.46 \\ \cline{1-1}
+
+            $\delta_{s}$=2, $\delta_{m}$=0, $\delta_{l}$=0 & 55.32 & 78.16 & 60.35 & 42.37 & 67.12 & 85.33 \\ \cline{1-1}
+
+            + Controller & 55.93 & 78.26 & 61.21 & 41.28 & 67.43 & 85.71 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=0, $\delta_{l}$=0 & 55.13 & 78.15 & 59.75 & 43.08 & 67.96 & 85.45 \\ \cline{1-1}
+
+            + Controller & 56.00 & 78.07 & 60.95 & 39.90 & 66.84 & 85.57 \\ \cline{1-1}
+
+            $\delta_{s}$=0, $\delta_{m}$=0, $\delta_{l}$=0 & 54.86 & 77.84 & 60.04 & 40.80 & 67.51 & 85.09 \\
+
+            \bottomrule
+		\end{tabular}}
+	\label{yolo-abl-contr}
+\end{center}
+\end{table}
+
+\begin{table}[!hbpt] % 
+\begin{center}
+	\small
+	\caption{Grid Search of Scale Margin Loss on VOC.}
+    \renewcommand\arraystretch{1.2}
+	\scalebox{0.9}{
+		\begin{tabular}{c|c|c|c|c|c|c}
+			\toprule
+    
+             \multicolumn{1}{c|}{Parameters} & \multicolumn{1}{c|}{AP} & \multicolumn{1}{c|}{AP$_{50}$} & \multicolumn{1}{c|}{AP$_{75}$} & \multicolumn{1}{c|}{AP$_{s}$}  & \multicolumn{1}{c|}{AP$_{m}$} & \multicolumn{1}{c}{AP$_{l}$} \\
+                
+            \midrule
+            
+            $\delta_{s}$=0, $\delta_{m}$=0, $\delta_{l}$=0 & 54.86 & 77.84 & 60.04 & 40.80 & 67.51 & 85.09 \\
+
+            \midrule
+            \midrule
+
+            $\delta_{s}$=$\frac{1}{4}$, $\delta_{m}$=0, $\delta_{l}$=0 & 54.85 & 77.74 & 59.67 & 41.45 & 66.38 & 85.10 \\ \cline{1-1}
+
+            $\delta_{s}$=$\frac{2}{4}$, $\delta_{m}$=0, $\delta_{l}$=0 & 54.90 & 78.17 & 59.40 & 41.54 & 66.91 & 85.40 \\ \cline{1-1}
+
+            $\delta_{s}$=$\frac{3}{4}$, $\delta_{m}$=0, $\delta_{l}$=0 & 55.00 & 77.71 & 60.03 & 40.51 & 66.32 & 85.35 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=0, $\delta_{l}$=0 & 55.13 & 78.15 & 59.75 & 43.08 & 67.96 & 85.45 \\ % \cline{1-1}
+            
+            \midrule
+            \midrule
+
+            $\delta_{s}$=1, $\delta_{m}$=$\frac{1}{4}$, $\delta_{l}$=0 & 55.01 & 77.67 & 59.95 & 41.41 & 66.96 & 85.23 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=$\frac{2}{4}$, $\delta_{l}$=0 & 54.94 & 78.08 & 59.38 & 42.08 & 67.21 & 85.59 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=$\frac{3}{4}$, $\delta_{l}$=0 & 55.00 & 78.07 & 60.11 & 40.73 & 67.43 & 85.36 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=1, $\delta_{l}$=0 & 55.02 & 77.81 & 60.27 & 41.71 & 67.09 & 84.87 \\ % \cline{1-1}
+
+            \midrule
+            \midrule
+
+            $\delta_{s}$=1, $\delta_{m}$=$\frac{2}{4}$, $\delta_{l}$=$\frac{1}{4}$ & 55.03 & 78.34 & 60.00 & 44.17 & 67.58 & 85.08 \\ \cline{1-1}
+
+            $\delta_{s}$=1, $\delta_{m}$=$\frac{2}{4}$, $\delta_{l}$=$\frac{2}{4}$ & 54.81 & 77.97 & 60.00 & 42.68 & 67.26 & 85.02 \\
+
+            \bottomrule
+		\end{tabular}}
+	\label{yolo-abl-param}
+\end{center}
+\end{table}
+
+\subsection{Comparison Experiments on Faster-RCNN}
+\label{section_4_2}
+
+% 我们使用FasterRCNN评估了我们的方法. RCNN系列是经典的双步检测器系列, 由SS和检测器两部分构成. Faster-RCNN提出RPN, 并且将RPN与检测器整合到一起, 首次实现了端到端训练. 在保持与FastRCNN相同精度的情况下大幅提升了检测速度. 
+
+In this section, we evaluate our method with Faster-RCNN~\cite{ren2016faster} on COCO~\cite{lin2014microsoft}. RCNN is a classic series of two-stage detectors, consisting of the selective search algorithm and the detector.
+
+% 如表中所示, 我们可以观察到我们的尺度边距函数在Faster-RCNN-50上相比基线提升了大约AP50+1.37%的性能. 并且在Faster-RCNN-101上提升了AP50+1.42的性能.
+
+As shown in Table~\ref{main_table}, our scale margin loss improved $AP_{50}$ +1.37\% compared to baseline on ResNet-50 backbone. Meanwhile, our scale margin loss improved $AP_{s}$ +0.4\%, $AP_{m}$ +1.53\%, and $AP_{l}$ +0.73\% compared to baseline. On ResNet-101 backbone, our scale margin loss improved $AP_{50}$ +1.42\%, $AP_{s}$ +0.48\%, $AP_{m}$ +1.21\%, and $AP_{l}$ +1.25\% compare to baseline.
+
+Although on ResNet-101 backbone, our scale margin loss exhibits $AP_{s}$ -0.25\% compared to the scale balance loss. But we also demonstrate $AP_{50}$ +1.18\%, $AP_{m}$ +0.77\%, and $AP_{l}$ +0.96\% compare to the Scale Balance loss. Because the scale balance loss only augment small objects, whereas our scale margin loss applies regularization for all scales.
+
+\subsection{Comparison Experiments on YoloX}
+\label{section_4_3}
+
+% 本节我们在YoloX上评估了我们的方法. 在YoloX-S上提升了小目标APs+3.37%的性能. YoloX是流行的单步检测器, 由无锚框设计, 解耦检测头和SimOTA标签分配组成. 单步检测器与双步检测器不同, 没有RPN组件. 因此单步检测器通常比双步检测器快但精度略低. 
+
+In this section, we evaluate our method with YoloX~\cite{ge2021yolox} on VOC \cite{everingham2010pascal}. YoloX is a popular one-stage detector. One-stage detectors are normally faster than two-stage detectors since one-stage detectors do not have \textit{RPN} component.
+
+As shown in Table~\ref{main_table}, on YoloX-S, our scale margin loss improved $AP_{50}$ +0.5\% and $AP_{s}$ +3.37\% compared to baseline. Meanwhile, our scale margin loss improved $AP$ +0.32\% and $AP_{s}$ +0.19\% compared to the scale balance loss. Proving that our scale margin loss is effective with the one-stage detector.
+
+\subsection{Ablation Study}
+\label{section_4_4}
+
+To better search for a suitable set of regularization terms $\delta_{i}$, we first leverage the controller to find a suitable starting value for $\delta_{s}$ in training, then carry out a grid search to find suitable $\delta_{m}$ and $\delta_{l}$ in VOC with YoloX-S. In grid search, we gradually decrease 0.25 as a step.
+
+As shown in Table~\ref{yolo-abl-contr} and Table~\ref{yolo-abl-param}, appropriate regularization terms can achieve improvements without the controller. Finally, we found that the set of regularization terms $\delta_{s}$, $\delta_{m}$ and $\delta_{l}$ achieved the best $AP$ 78.34\% and $AP_{s}$ 44.17\%.
+
+% 假设数据集有q个类别, 网络会为一个目标输出q个logit值, 那么决策边界就是正确类的逻辑值等于最大的错误类逻辑值. 我们通过将决策边界每次上下移动5个单位距离创造出了6个环带. 随着环带的上升, 目标越来越简单
+
+We further visualize small objects' logit distribution on the test set. Assuming a model outputs $q$ number logit values for an object, x-axis is the correct class logit and y-axis is the maximum wrong class logit. The decision boundary is the line where the correct class logit equals the max wrong class logit. We divide the whole figure into five belt areas by moving the decision boundary upwards five units every time: $[-\infty, 0]$, $[0, 5]$, $[5, 10]$, $[10, 15]$, and $[15, 20]$. As the belt area rises, the object can be better classified.
+
+For all small object predictions of the baseline, we divide them into five belt areas based on their maximum prediction logit. Then we visualize the prediction distribution of the same objects with our scale margin loss, as shown in Fig.~\ref{fig:visualization}. Although in the bottom-right sub-figure, ours and the baseline have close distribution. However, in the top-middle, top-right, bottom-left, and bottom-middle sub-figures, our scale margin loss all has predictions exceeding the baseline, as marked by red arrows.
+
+\section{Conclusion}
+
+% 我们观察到不同的目标的收敛速度不同. 这是因为不同尺度的目标拥有不同程度的可利用特征. 这种可利用特征差异导致模型会从更小的目标学习到更多的无用特征, 导致训练集上的边距持续增加, 而测试集的边距几乎不变. 为了解决这个问题, 我们提出了尺度边距函数, 通过增加一系列正则化项来减少模型对无用特征的学习速度. 在未来的工作中, 我们会研究目标的复杂度和最佳泛化边距值与尺度之间的关系, 更进一步提升方法的性能. 
+
+We observed that objects from different scales have different best generalization times on the train set. This can happen because objects of different scales tend to have different levels of useful features. Such differences in useful feature levels result in the model learning more useless features from smaller objects. To address this issue, we proposed the scale margin loss. By adding a set of regularization terms to object margins, we expend the margin for smaller objects and improve the model's overall generalization performance. However, the relation between the regularization term $\delta$ and the object scale is not fully clear, and we leave this issue for future work.
+
+\bibliographystyle{IEEEbib}
+\bibliography{main}
+
+\end{document}
