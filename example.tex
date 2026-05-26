@@ -106,7 +106,7 @@
 
 	Enabling humanoid robots with open-world motion capabilities is a central goal in embodied intelligence. Benefiting from recent advances in general motion tracking~\cite{}, humanoid robots can now track diverse reference motions through a unified low-level controller~\cite{}, without per-skill retraining.
 	
-	As a result, the bottleneck is shifting. The key question is no longer only whether a controller can execute a given reference motion stably---it is also whether we can obtain reference motions that are both diverse and reliable enough to begin with. Traditional motion capture provides physically consistent data with clean calibration, but it is expensive to collect and limited in motion coverage. In contrast, Internet videos span a far richer space of extreme motions and interactive behaviors, making them a more scalable source of reference motions.
+	As a result, the bottleneck is shifting. The key question is no longer only whether a controller can execute a given reference motion stably - it is also whether we can obtain reference motions that are both diverse and reliable enough to begin with. Traditional motion capture provides physically consistent data with clean calibration, but it is expensive to collect and limited in motion coverage. In contrast, Internet videos span a far richer space of extreme motions and interactive behaviors, making them a more scalable source of reference motions.
 	
 	%%%
 	% 第 2 段：野外视频恢复出的参考动作并不是控制器可直接执行的参考轨迹
@@ -128,7 +128,7 @@
 	
 	% 当跟踪器被迫执行这些参考动作时，机器人会更容易失去稳定性
 
-	However, 3D human motions recovered from in-the-wild videos are not ready-to-use references for closed-loop physical control. They are visual estimates, not physically validated trajectories. Camera shake, monocular depth ambiguity, human pose reconstruction~\cite{}, and robot retargeting~\cite{} all introduce reference-frame artifacts: root floating or penetration, foot sliding, orientation errors, and contact timing mismatch. Such artifacts can be subtle in visual space---a pose may look plausible frame by frame. In physical space, however, these artifacts directly corrupt the signals that controllers depend on: contact states, support relationships, and body balance. When a tracker is forced to follow flawed references, the robot becomes substantially more vulnerable to disturbances.
+	However, 3D human motions recovered from in-the-wild videos are not ready-to-use references for closed-loop physical control. They are visual estimates, not physically validated trajectories. Camera shake, monocular depth ambiguity, human pose reconstruction~\cite{}, and robot retargeting~\cite{} all introduce reference-frame artifacts: root floating or penetration, foot sliding, orientation errors, and contact timing mismatch. Such artifacts can be subtle in visual space - a pose may look plausible frame by frame. In physical space, however, these artifacts directly corrupt the signals that controllers depend on: contact states, support relationships, and body balance. When a tracker is forced to follow flawed references, the robot becomes substantially more vulnerable to disturbances.
 	
 	%%%
 	% 第 3 段：提出“鲁棒性预算”视角，说明伪影为什么致命
@@ -152,7 +152,7 @@
 	
 	% 这说明参考帧伪影本身会削弱跟踪器抵抗扰动的能力
 
-	We characterize this mismatch as a \textit{kinematic-to-dynamic gap}: a reference motion can appear natural in pose space yet still be difficult for a physical robot to execute stably. This gap is not merely a qualitative intuition---it directly consumes what we call the \textit{robustness budget} of the tracker. Every low-level controller has a finite capacity to absorb sensing errors, modeling noise, and external perturbations. When reference-frame artifacts already occupy part of that budget, less remains for handling real-world disturbances. A diagnostic experiment (Fig.~\ref{fig:robustness-budget}) confirms this: as root reference noise increases, the robot's post-push stability margin drops monotonically, and the end-to-end success rate of the full motion sequence declines accordingly.
+	We characterize this mismatch as a \textit{kinematic-to-dynamic gap}: a reference motion can appear natural in pose space yet still be difficult for a physical robot to execute stably. This gap is not merely a qualitative intuition - it directly consumes what we call the \textit{robustness budget} of the tracker. Every low-level controller has a finite capacity to absorb sensing errors, modeling noise, and external perturbations. When reference-frame artifacts already occupy part of that budget, less remains for handling real-world disturbances. A diagnostic experiment (Fig.~\ref{fig:robustness-budget}) confirms this: as root reference noise increases, the robot's post-push stability margin drops monotonically, and the end-to-end success rate of the full motion sequence declines accordingly.
 	
 	%%%
 	% 第 4 段：提出解决方案应当满足的要求
@@ -184,7 +184,7 @@
 
 	% 它的目标不是让参考动作在视觉上更像人，而是让参考动作更容易被冻结跟踪器执行
 
-	A suitable solution should satisfy four requirements. First, it should be placed before the tracker rather than replace or retrain it. Modern trackers already encode complex dynamic control capabilities~\cite{}; asking the same module to simultaneously repair upstream errors and handle downstream dynamics conflates two distinct problems. Second, it should be online and lightweight, requiring no offline trajectory optimization or per-video dynamics solving. Third, it should target spatial artifacts---errors in root height, body orientation, and horizontal displacement---that can be corrected at the per-frame level, rather than contact timing misalignment which demands sequence-level temporal realignment. Fourth, it should be \textit{tracker-aware}: the objective is not to make the reference look more human-like, but to make it easier for the frozen tracker to execute.
+	A suitable solution should satisfy four requirements. First, it should be placed before the tracker rather than replace or retrain it. Modern trackers already encode complex dynamic control capabilities~\cite{}; asking the same module to simultaneously repair upstream errors and handle downstream dynamics conflates two distinct problems. Second, it should be online and lightweight, requiring no offline trajectory optimization or per-video dynamics solving. Third, it should target spatial artifacts - errors in root height, body orientation, and horizontal displacement - that can be corrected at the per-frame level, rather than contact timing misalignment which demands sequence-level temporal realignment. Fourth, it should be \textit{tracker-aware}: the objective is not to make the reference look more human-like, but to make it easier for the frozen tracker to execute.
 	
 	%%%
 	% 第 5 段：介绍 FEMR
@@ -210,7 +210,7 @@
 
 	% 当参考帧伪影破坏跟踪稳定性时，FEMR 应输出有效修正
 
-	We propose FEMR (Front-End Motion Refiner), a lightweight module inserted between corrupted reference motions and a frozen tracker. FEMR is not a new motion tracker. Instead, it predicts per-frame task-space $\Delta SE(3)$ corrections---residual adjustments to root translation and orientation---gated by separate confidence scores for position and orientation. These confidence scores give FEMR a critical property: it defaults to restraint. When the reference motion is already executable, FEMR keeps the input unchanged. When artifacts threaten stability, FEMR outputs corrections just large enough to restore executability, without overshooting into dynamically infeasible commands. To learn this behavior, FEMR is trained with a tracker-aware executable reward that measures whether a correction actually improves physical execution, rather than merely reducing kinematic error.
+	We propose FEMR (Front-End Motion Refiner), a lightweight module inserted between corrupted reference motions and a frozen tracker. FEMR is not a new motion tracker. Instead, it predicts per-frame task-space $\Delta SE(3)$ corrections - residual adjustments to root translation and orientation - gated by separate confidence scores for position and orientation. These confidence scores give FEMR a critical property: it defaults to restraint. When the reference motion is already executable, FEMR keeps the input unchanged. When artifacts threaten stability, FEMR outputs corrections just large enough to restore executability, without overshooting into dynamically infeasible commands. To learn this behavior, FEMR is trained with a tracker-aware executable reward that measures whether a correction actually improves physical execution, rather than merely reducing kinematic error.
 	
 	%%%
 	% 第 6 段：贡献列表
@@ -247,161 +247,98 @@
 \subsection{General Motion Tracking for Humanoids}
 
 	% Inport 基于强化学习的人形运动跟踪取得了快速进展。本节回顾这一方向：从早期对单一动作的模仿学习，到在多样化数据集上训练的统一全身策略，再到面向通用运动跟踪的规模化尝试
-	
-
-	% PHC, ExBody2, OmniH2O, HumanPlus, Any2Track, KungfuBot2, RobotDancing, AMO, HOVER, GMT, UniTracker, SONIC
 
 	% PHC 使用大规模动捕数据训练对抗运动先验（AMP），将人体关节运动映射到物理仿真角色。首次以单一策略实现了多样化人体动作的实时全身跟踪
-	
 
 	% ExBody2 将全身控制分解为两部分：上半身跟踪人体动捕的关节角度，下半身通过 RL 独立跟踪根速度指令。双腿不被强制匹配参考轨迹，而是自主决定如何维持平衡
-	
 
 	% OmniH2O 使用蒸馏策略将 VR 头显、动捕服、RGB 相机等多模态输入统一映射到同一控制空间，单一策略同时服务实时遥操作和离线自主执行
-	
 
-	% HumanPlus 构建了全栈模仿管线：WHAM 从单 RGB 相机实时估计人体姿态，GMR 重定向到机器人，Humanoid Shadowing Transformer 零样本执行。首次实现了"看人→跟做"，但未处理视频姿态估计引入的伪影
+	% HumanPlus 构建了全栈模仿管线：WHAM 从单 RGB 相机实时估计人体姿态，GMR 重定向到机器人，Transformer 零样本执行。首次实现了"see-to-do"，但未处理视频姿态估计引入的伪影
 	
-
 	% Any2Track 由 AnyTracker 和 AnyAdapter 两级组成：AnyTracker 使用规范动作空间和专家蒸馏训练通用跟踪器；AnyAdapter 通过世界模型从交互历史中提取动力学嵌入，在冻结策略上施加在线自适应，使机器人在飞踹、拉拽、复杂地形等复合扰动下保持稳定
-	
 
 	% KungfuBot2 通过分阶段课程学习逐步扩展策略能力——从静态动作到高动态武术动作逐级训练，最终实现踢腿、旋转跳跃等动作的分钟级连续执行
-	
 
 	% RobotDancing 的策略不预测绝对关节指令，而是输出对参考关节目标的残差修正 Δq。训练时使用分布感知+失败感知的采样策略，确保长尾高动态动作（跳跃、旋转、侧手翻）得到充分覆盖，最终实现多分钟连续舞蹈的零样本 sim-to-real 迁移
-	
 
 	% AMO 在训练中动态调整不同身体部位的跟踪精度权重和物理约束强度，让策略在"精确跟踪"和"物理可行"之间学习自动平衡，而非依赖人工设定的固定奖励权重
-	
 
 	% HOVER 使用单一 Transformer 策略同时支持关节位置、关键点姿态、根速度指令等多种控制模式。不同模式共享运动编码空间，使经验可以跨模式迁移
-	
 
 	% GMT 引入了两项技术：自适应采样根据动作难度自动平衡训练数据分布；Motion MoE 让不同运动区域由不同专家子网络处理。是本文冻结的 tracker
-	
 
 	% UniTracker 采用教师-学生流水线：教师策略在仿真中用特权信息学习隐式运动表示，学生策略通过蒸馏仅凭本体感受复现同等质量的跟踪。隐式运动编码使跟踪器无需逐帧显式参考即可理解当前运动意图
-	
 
 	% SONIC 通过融合多源动捕数据、扩大模型容量、支持多种运动输入接口，探索从规模化跟踪到通用人形控制的技术路线。当前数据规模最大的开源全身跟踪器
 
-
-
-	RL-based humanoid motion tracking has advanced rapidly. This section traces the progression: from imitating individual motions, to unified whole-body policies trained on diverse datasets, to recent efforts toward general-purpose tracking at scale. PHC trains an adversarial motion prior (AMP) on large-scale motion capture data to map human joint motion onto physically simulated characters. It was the first to demonstrate real-time whole-body tracking of diverse motions with a single policy. ExBody2 decomposes whole-body control into two parts: the upper body tracks reference joint angles from motion capture, while the lower body independently follows root velocity commands via RL. The legs are not forced to match the reference trajectory - they decide how to maintain balance on their own. OmniH2O uses a distillation policy to map multimodal inputs---VR headsets, motion capture suits, RGB cameras---into a shared control space. A single policy handles both real-time teleoperation and offline autonomous execution. HumanPlus builds a full-stack imitation pipeline: WHAM estimates human pose from a single RGB camera in real time, GMR retargets the pose to the robot, and the Humanoid Shadowing Transformer executes zero-shot. It was the first to demonstrate 'see-to-do' end-to-end, but does not address artifacts introduced by video pose estimation. Any2Track consists of two stages: AnyTracker trains a generalist tracker via canonicalized action spaces and expert distillation; AnyAdapter extracts dynamics embeddings from interaction history through a world model and applies online adaptation on top of the frozen policy, keeping the robot stable under combined disturbances such as kicks, rope pulling, and uneven terrain. KungfuBot2 uses a staged curriculum to progressively expand policy capability---training from static poses to highly dynamic martial arts motions step by step, achieving minute-scale continuous execution of kicks, spins, and jumps. RobotDancing's policy does not predict absolute joint commands; it outputs residual corrections $\Delta q$ on top of reference joint targets. It uses distribution-aware and failure-aware sampling during training to ensure sufficient coverage of long-tail, high-dynamic motions (jumps, spins, cartwheels), achieving zero-shot sim-to-real transfer of multi-minute continuous dance. AMO dynamically adjusts per-body-part tracking weights and physics constraint strengths during training, letting the policy learn to balance precise tracking against physical feasibility, rather than relying on hand-tuned fixed reward weights. HOVER uses a single Transformer policy to simultaneously support multiple control modes---joint positions, keypoint poses, root velocity commands, and more. All modes share a common motion encoding space, enabling experience to transfer across modes. GMT introduces two techniques: adaptive sampling that rebalances the training distribution based on motion difficulty, and a Motion Mixture-of-Experts architecture that assigns different motion regions to different expert sub-networks. It serves as the frozen tracker in this work. UniTracker employs a teacher-student pipeline: the teacher learns a latent motion representation with privileged information in simulation, and the student distills this into a proprioception-only policy. The implicit motion encoding lets the tracker understand the current motion intent without requiring explicit per-frame reference poses. SONIC explores the path from scaled-up tracking to generalist humanoid control by fusing multi-source motion capture data, increasing model capacity, and supporting diverse motion input interfaces. It is the largest-scale open-source whole-body tracker to date.
-
-	AMP~\cite{amp2021}
-	
-	PHC~\cite{phcluo2023}
-	ExBody2~\cite{exbodyji2024}
-	OmniH2O~\cite{omnih2ohe2024}
-	HumanPlus~\cite{humanplus2024}
-	Any2Track~\cite{zhang2025track}
-	KungfuBot2~\cite{han2025kungfubot2}
-	RobotDancing~\cite{sun2025robotdancing}
-	AMO~\cite{li2025amo}
-	HOVER~\cite{hover2025}
-	GMT~\cite{gmtchen2025}
-	UniTracker~\cite{uniyin2025}
-	SONIC~\cite{sonic2025}
-
 	% Export 上述工作证明通用运动跟踪器已不再是动作多样性的瓶颈。但它们共享一个前提：参考动作本身是动力学可行的。当参考来自野外视频、在进入跟踪器前已包含空间伪影时，跟踪器自身的鲁棒性不足以弥补上游信号的质量损失。本文的出发点正在于此——这一前提并不总是成立
-	These works demonstrate that general motion trackers are no longer the bottleneck for motion diversity. Yet they share a common premise: the reference motion itself is dynamically executable. When the reference comes from in-the-wild videos and already contains spatial artifacts before reaching the tracker, the tracker's own robustness is insufficient to compensate for the upstream signal degradation. This paper starts from exactly this observation---that the premise does not always hold.
+
+	RL-based humanoid motion tracking has advanced rapidly, from imitating individual motions to unified whole-body policies to recent general-purpose tracking systems.
+	
+	PHC~\cite{phcluo2023} trains an adversarial motion prior (AMP~\cite{amp2021}) on large-scale mocap to map human motion to simulated characters - the first real-time whole-body tracker. ExBody2~\cite{exbodyji2024} decouples upper-body pose tracking from lower-body RL velocity control, letting legs decide how to balance independently. OmniH2O~\cite{omnih2ohe2024} distills multimodal inputs (VR, mocap, RGB) into a shared control space for both teleoperation and autonomous execution. HumanPlus~\cite{humanplus2024} builds a full-stack pipeline - WHAM~\cite{whamshin2024}, GMR~\cite{gmr2025}, Shadowing Transformer - for zero-shot see-to-do, but does not address artifacts from video pose estimation. Any2Track~\cite{zhang2025track} pairs a generalist tracker (AnyTracker) with a history-conditioned adaptation module (AnyAdapter) for robustness under combined physical disturbances. KungfuBot2~\cite{han2025kungfubot2} extends policy capability from static to highly dynamic motions via staged curriculum learning. RobotDancing~\cite{sun2025robotdancing} predicts residual joint corrections $\Delta q$ on reference targets, using distribution- and failure-aware sampling for long-tail dynamic motions. AMO~\cite{li2025amo} dynamically adjusts per-body-part tracking weights during training to balance precision and feasibility. HOVER~\cite{hover2025} supports joint, keypoint, and velocity control modes within a single Transformer via a shared motion encoding space. GMT~\cite{gmtchen2025} combines adaptive motion sampling with a Motion MoE architecture. It is the frozen tracker in this work. UniTracker~\cite{uniyin2025} distills privileged teacher information into a proprioception-only student via latent motion encoding. SONIC~\cite{sonic2025} scales up tracking via multi-source mocap fusion and increased model capacity, the largest open-source tracker to date.
+	
+	These works show that general trackers are no longer the bottleneck for motion diversity. But they share a premise: the reference is dynamically executable. When references come from in-the-wild videos with spatial artifacts already present, the tracker's robustness is insufficient to compensate. This paper starts from the observation that this premise does not always hold.
 
 \subsection{From In-the-Wild Videos to Reference Motions}
 
 	% Inport 通用跟踪器的能力提升使参考动作的来源成为新的关注点。从单目视频恢复人体的三维姿态和全局轨迹，是获取可扩展参考动作的关键途径。本节回顾这一方向：从单帧人体网格恢复，到在世界坐标系中估计完整时序运动
-	
-
-	% HMR, GLAMR, TRACE, WHAM, GVHMR, TRAM, PHMR
 
 	% HMR 使用对抗学习从单目 RGB 图像直接回归 SMPL 人体模型的姿态和体型参数，结合 2D 关键点重投影损失和 3D 对抗先验，无需成对的 2D-3D 监督。是单目人体重建领域的奠基工作。其输出的深度歧义和姿态误差会沿整个管线向下传递——这是伪影的最上游来源
 	
-
 	% GLAMR 在动态相机下联合优化相机运动、人体姿态和全局轨迹，使用运动先验填补遮挡期间的人体轨迹，避免遮挡导致身份切换或轨迹中断
 	
-
 	% TRACE 在一个端到端网络中同时恢复和跟踪动态相机视频中的多人 3D 世界坐标轨迹。它用 World Motion Map 将人体运动从相机坐标映射到全局坐标，首次统一解决了多人跟踪和全局轨迹恢复，无需分两阶段处理
 	
-
 	% WHAM 融合 AMASS 运动先验和 SLAM 估计的相机角速度，通过运动编码器将 2D 关键点序列提升为 3D 表征，再与视频图像特征融合，将人体从相机坐标恢复至全局世界坐标。首次让视频方法在逐帧精度上超越所有单帧方法。其全局轨迹精度受限于 SLAM——在动态人体遮挡场景下相机运动估计不可靠
-	
 
 	% GVHMR 用重力-视角坐标替代绝对世界坐标：以重力方向为固定参考轴，仅估计人体相对重力的旋转和平移。在倾斜相机、上下坡等场景下显著减少了根节点朝向漂移。但重力方向本身需要从视频中估计，在快速运动和无地平线参照时仍有不可消除的误差
 	
-
 	% TRAM 分两步恢复人体的全局轨迹和运动：先鲁棒化 SLAM 从静态背景中恢复度量尺度的相机轨迹，再通过视频 Transformer（VIMO）回归人体运动。它对动态人体区域做掩码处理，使 SLAM 仅依赖静态背景。但在背景纹理稀疏或高度动态场景下 SLAM 仍可能发散
 	
-
 	% PHMR 将文本或 2D 视觉提示作为条件信号注入重建网络，用 CLIP 嵌入空间对齐文本描述和人体姿态特征，使重建结果不仅准确而且符合语义约束
 
-
-	As trackers improve, attention shifts upstream to the source of reference motions. Recovering 3D human pose and global trajectory from monocular video is the key to scalable reference acquisition. This section reviews the progression: from single-frame mesh recovery to methods that estimate full temporal motion in world coordinates. HMR uses adversarial learning to regress SMPL pose and shape parameters directly from a monocular RGB image, combining 2D keypoint reprojection loss with a 3D adversarial prior, without paired 2D-3D supervision. It is the foundational work in monocular human reconstruction. Its depth ambiguity and pose errors propagate through the entire downstream pipeline---this is the most upstream source of artifacts. GLAMR jointly optimizes camera motion, human pose, and global trajectory under dynamic cameras, using a motion prior to fill in trajectories during occlusions and prevent identity switches or trajectory breaks. TRACE recovers and tracks multiple 3D human trajectories in world coordinates from dynamic camera videos within a single end-to-end network. Its World Motion Map transforms human motion from camera coordinates to global coordinates, unifying multi-person tracking and global trajectory recovery in one stage for the first time. WHAM fuses an AMASS motion prior with SLAM-estimated camera angular velocity. A motion encoder lifts 2D keypoint sequences to 3D representations, which are then fused with video image features to recover the human in global world coordinates. It was the first video-based method to surpass all single-frame methods in per-frame accuracy. Its global trajectory fidelity is bounded by SLAM - camera motion estimates become unreliable under dynamic human occlusion. GVHMR replaces absolute world coordinates with gravity-view coordinates: it fixes the gravity direction as a reference axis and only estimates rotation and translation relative to gravity. This significantly reduces root orientation drift under tilted cameras and sloped terrain. However, the gravity direction must itself be estimated from video, and errors remain unavoidable during fast motion or when no horizon reference is visible. TRAM recovers global human trajectory and motion in two steps: it first robustifies SLAM to recover a metric-scale camera trajectory from static backgrounds, then uses a video Transformer (VIMO) to regress body motion. It masks out dynamic human regions so SLAM relies only on the static scene. However, SLAM can still diverge when background texture is sparse or the scene is highly dynamic. PHMR injects text or 2D visual prompts as conditioning signals into the reconstruction network, using CLIP embeddings to align textual descriptions with human pose features, so that the output is not only accurate but also semantically consistent.
-
-	HMR~\cite{hmr2018}
-	GLAMR~\cite{yuan2022glamr}
-	TRACE~\cite{sun2023trace}
-	WHAM~\cite{whamshin2024}
-	GVHMR~\cite{shen2024world}
-	TRAM~\cite{tramwang2024}
-	PHMR~\cite{wang2025prompthmr}
-	
 	% Export 上述方法产出的三维人体运动在姿态空间中通常是合理的。但单目重建的固有歧义使得全局轨迹中不可避免地残留空间误差：根节点高度漂移、绝对朝向偏移、水平位移累积。这些误差在视觉上不易察觉，却足以改变跟踪器依赖的物理条件。现有修正手段依赖离线优化和完整序列——它需要全部未来帧和可观的求解时间。当目标是零样本即时执行时，离线修正天然不适用。当前管线在运动学重建与跟踪器之间，缺少一个在线、逐帧、不依赖完整序列的前端修正环节
-	The 3D human motions produced by these methods are generally plausible in pose space. But the inherent ambiguity of monocular reconstruction means that spatial errors inevitably remain in the recovered global trajectory: root height drift, absolute orientation offset, accumulated horizontal displacement. These errors are visually subtle but sufficient to alter the physical conditions the tracker depends on. Existing correction methods rely on offline optimization and full sequence access---they need all future frames and substantial solve time. When the goal is zero-shot immediate execution, offline correction is inherently inapplicable. The current pipeline, between kinematic reconstruction and the tracker, lacks an online, per-frame, sequence-independent front-end correction stage.
+
+	As trackers improve, attention shifts upstream. Recovering 3D human pose and global trajectory from monocular video is key to scalable reference acquisition - we review the progression from single-frame mesh recovery to full temporal motion in world coordinates. HMR~\cite{hmr2018} regresses SMPL parameters from a single RGB image via adversarial learning. Its depth ambiguity is the most upstream source of artifacts in the pipeline. GLAMR~\cite{yuan2022glamr} jointly optimizes camera motion, body pose, and global trajectory under dynamic cameras, using a motion prior to fill occlusions. TRACE~\cite{sun2023trace} recovers multi-person 3D world trajectories in a single end-to-end network via its World Motion Map. WHAM~\cite{whamshin2024} fuses an AMASS motion prior with SLAM-estimated camera velocity to recover world-grounded humans; its accuracy is bounded by SLAM reliability under occlusion. GVHMR~\cite{shen2024world} anchors the body to a gravity direction axis to reduce orientation drift under tilted cameras, though gravity estimation itself remains imperfect. TRAM~\cite{tramwang2024} robustifies SLAM on static backgrounds, then regresses body motion with a video Transformer; SLAM diverges in sparse or highly dynamic scenes. PHMR~\cite{wang2025prompthmr} injects text or visual prompts into reconstruction via CLIP embeddings for semantically consistent output.
+
+	These methods produce motions that are plausible in pose space but not physically validated. Monocular ambiguity leaves inevitable spatial errors - root drift, orientation offset, horizontal displacement - that alter the physical conditions trackers depend on. No online, per-frame correction stage currently exists between kinematic reconstruction and the tracker.
 
 	% PHC 将 SMPL 人体姿态通过关键点匹配映射到人形机器人关节空间，是 RL-based tracking 中早期常用的重定向方案
-	PHC maps SMPL human poses to humanoid joint space via keypoint matching. It was the earlier and widely used retargeting scheme in RL-based tracking pipelines.
+	% PHC~\cite{phcluo2023} maps SMPL human poses to humanoid joint space via keypoint matching - an earlier retargeting scheme in RL-based tracking.
 
 	% GMR 使用两阶段 IK 优化实现人体到机器人的运动重定向：先优化根节点朝向消除初始位姿偏差，再做全身微调。其关键创新是非均匀局部缩放——对不同身体部位使用独立的缩放因子
-	GMR uses two-stage IK optimization for human-to-humanoid motion retargeting: it first optimizes root orientation to eliminate initial pose bias, then performs full-body fine-tuning. Its key innovation is non-uniform local scaling---applying independent scaling factors to different body parts rather than a single global factor.
+	% GMR~\cite{gmr2025} uses two-stage IK optimization with non-uniform per-body-part scaling for higher-quality retargeting.
 
 	% OmniRetarget 在机器人、物体、地面之间构建交互网格，通过拉普拉斯形变能量在重定向过程中保持空间交互关系不变，同时施加硬物理约束（关节限位、自碰撞、足底接触）。它能保证输出轨迹物理自洽，但无法修正输入人体姿态中已存在的空间误差
-	OmniRetarget constructs an interaction mesh among robot, objects, and ground, using Laplacian deformation energy to preserve spatial interaction relationships during retargeting while imposing hard physics constraints (joint limits, self-collision, foot contact). It guarantees physically self-consistent output trajectories, but cannot correct spatial errors already present in the input human pose.
+	% OmniRetarget~\cite{yang2025omniretarget} preserves robot-object-ground interaction via an interaction mesh with hard physics constraints. It guarantees self-consistent output but cannot correct errors already in the input pose.
 
 	% ProtoMotions 从动捕数据提取有限个原型姿态作为动作基，用对抗运动先验将真实人体动作投影到原型组合上。在重定向管线中作为可选后处理步骤，对违反物理约束的关节轨迹做平滑修正
-	ProtoMotions extracts a finite set of prototype poses from motion capture data as an action basis, then projects real human motions onto combinations of these prototypes via an adversarial motion prior. It serves as an optional post-processing step in the retargeting pipeline, smoothing joint trajectories that violate physics constraints.
-
-	PHC~\cite{phcluo2023}
-	GMR~\cite{gmr2025}
-	OmniRetarget~\cite{yang2025omniretarget}
-	ProtoMotions~\cite{ProtoMotions}
+	% ProtoMotions~\cite{ProtoMotions} projects motions onto a learned prototype basis as post-processing for physics violations.
 
 \subsection{Residual Learning and Sim-to-Real Adaptation}
 
 	% Inport 残差学习提供了一种无需重新训练主干网络的修正范式：冻结已有的基座控制器，在其上训练轻量的加性修正模块。本节回顾这一范式从机器人操作到足式运动、再到人形全身控制中的发展
+
+	% Residual RL 率先提出残差强化学习范式：冻结手写反馈控制器，在其上训练 RL 策略输出加性残差动作。基座策略负责已知动力学，残差策略仅学习接触密集和不确定性区域
 	
-
-	% RMA, ASAP, ResMimic, MOSAIC, OmniXtreme
-
-	% Residual RL 率先提出残差强化学习范式：冻结手写反馈控制器，在其上训练 RL 策略输出加性残差动作。基座策略负责已知动力学，残差策略仅学习接触密集和不确定性区域。FEMR 沿用同一架构思想——残差加在参考空间而非动作空间
-	
-
 	% RMA 将策略分解为基座和自适应两部分：基座在多样化仿真环境（不同摩擦、地形、载荷）中训练后冻结；自适应模块通过监督学习从本体感受历史实时推断环境隐变量并调制基座行为。首次在真实足式机器人上展示了在线自适应多地形能力
 	
-
 	% ASAP 先训练 motion-tracking 策略，再用真实数据训练 delta action model 补偿仿真动力学失配，最后将 delta model 蒸馏回基座策略。delta model 被冻结后作为仿真环境的动力学修正层，基座策略在该增强仿真中微调，部署时不再需要 delta model。实现了跳跃、后空翻等敏捷动作的零样本迁移
-	
 
 	% ResMimic 分两阶段训练：先预训练通用跟踪策略作为运动先验，再冻结该先验、针对特定操作任务训练残差策略。残差仅学习操作相关的关节修正，不干扰已学好的运动技能。残差施加在动作空间
-	
 
 	% MOSAIC 冻结通用跟踪策略，用少量遥操作数据训练轻量残差模块，通过双教师蒸馏将残差修正注入跟踪器同时防止灾难性遗忘。与 FEMR 架构最接近——冻结 tracker + 轻量修正——但修正施加在动作空间
 	
-
 	% OmniXtreme 使用 flow matching 从大规模动捕数据生成运动先验分布，再通过残差 RL 后训练弥合仿真-真实差距。用生成模型的结构化运动先验替代传统轨迹跟踪参考信号，使策略在行为空间而非轨迹空间中探索。残差仍作用于 tracker 输出端
 
-
-	Residual learning offers a correction paradigm that avoids retraining the backbone: freeze an existing base controller and train a lightweight additive correction module on top. This section traces the paradigm from robotic manipulation to legged locomotion to recent humanoid whole-body control. Residual RL first formalized the residual reinforcement learning paradigm: freeze a hand-engineered feedback controller and train an RL policy to output additive residual actions. The base handles known dynamics; the residual only learns contact-rich and uncertain regions. FEMR adopts the same architectural idea - with residuals applied in reference space rather than action space. RMA decomposes the policy into a base and an adaptation module: the base is trained in diverse simulation (varying friction, terrain, payloads) and then frozen; the adaptation module infers environment latent variables from proprioceptive history in real time via supervised learning and modulates the base accordingly. It was the first to demonstrate online multi-terrain adaptation on a real legged robot. ASAP first trains a motion-tracking policy, then trains a delta action model on real-world data to compensate for simulation dynamics mismatch, and finally distills the delta model back into the base policy. The frozen delta model serves as a dynamics correction layer for the simulator; the base policy is fine-tuned in this augmented simulation and deploys without the delta model. It achieves zero-shot transfer of agile motions such as jumping and backflips. ResMimic trains in two stages: it first pretrains a generalist tracking policy as a motion prior, then freezes that prior and trains a residual policy for specific manipulation tasks. The residual only learns manipulation-related joint corrections, leaving the already-learned motion skills undisturbed. The residual is applied in action space. MOSAIC freezes a generalist tracking policy and trains a lightweight residual module on a small amount of teleoperation data, using dual-teacher distillation to inject the residual correction into the tracker while preventing catastrophic forgetting. Its architecture is the closest to FEMR - frozen tracker plus lightweight correction - but the correction is applied in action space. OmniXtreme uses flow matching to generate a motion prior distribution from large-scale motion capture data, then applies residual RL post-training to bridge the sim-to-real gap. The structured motion prior from a generative model replaces the traditional trajectory-tracking reference signal, allowing the policy to explore in behavior space rather than trajectory space. The residual still acts on the tracker output.
-
-	Residual RL~\cite{johannink2019residual}
-	RMA~\cite{kumar2021rma}
-	ASAP~\cite{asap2025}
-	ResMimic~\cite{resmimic2025}
-	MOSAIC~\cite{mosaic2026}
-	OmniXtreme~\cite{omnixtreme2026}
-
 	% Export 残差学习的有效性已在多种机器人任务中得到验证。但在人形运动控制中，已有残差方法均将修正施加在动作空间——它们改变的是跟踪器的输出。当问题源头在上游参考信号而非跟踪器自身时，在参考空间施加修正更为直接。在参考层做在线、逐帧的前端残差修正——这一方向尚未被探索
-	Residual learning has been validated across diverse robotic tasks. In humanoid motion control, however, existing residual methods all apply corrections in action space---they modify the tracker's output. When the problem originates in the upstream reference signal rather than the tracker itself, applying corrections directly in reference space is more direct. Online, per-frame, front-end residual correction at the reference level---this direction remains unexplored.
+
+	Residual learning avoids retraining the backbone: freeze a base controller and train a lightweight additive correction module on top. We trace this paradigm from manipulation to legged locomotion to humanoid whole-body control.
+	
+	Residual~RL~\cite{johannink2019residual} first formalized the paradigm: a frozen base controller plus a learned additive residual. FEMR shares this architecture but applies residuals in reference rather than action space. RMA~\cite{kumar2021rma} splits into a base policy (frozen after diverse training) and an adaptation module that infers environment latents from proprioceptive history. ASAP~\cite{asap2025} trains a delta action model on real data to correct sim dynamics mismatch, then distills it back into the base for deployment. ResMimic~\cite{resmimic2025} pretrains a generalist tracking prior, then freezes it and trains task-specific residuals in action space. MOSAIC~\cite{mosaic2026} freezes a tracking policy and trains a residual module on teleoperation data via dual-teacher distillation. OmniXtreme~\cite{omnixtreme2026} uses flow matching to generate motion priors, then applies residual RL post-training. The residual still acts on the tracker output.
+
+	Residual learning has been validated across diverse tasks. In humanoid motion control, however, existing residual methods all correct in action space - they modify the tracker's output. When the problem is upstream in the reference signal, correcting in reference space is more direct. Online, per-frame, front-end residual correction at the reference level remains unexplored.
 
 %===============================================================================
 
