@@ -1,10 +1,35 @@
 \documentclass{article}
 
+% \usepackage{spconf}
+\usepackage{color}
+\usepackage{xcolor}
+% \usepackage{epsfig}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+% \usepackage{multirow}
+\usepackage{pifont}
+\usepackage{bbding}
+\usepackage{threeparttable}
+\usepackage{subfigure}
+\usepackage{dashrule}
+% \usepackage{arydshln}
+\usepackage{boldline}
+\usepackage{graphicx}
+
+% \usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage[french,boxed,vlined,linesnumbered,inoutnumbered,rightnl]{algorithm2e}
+
 \usepackage{corl_2026} % Use this for the initial submission.
 % \usepackage[final]{corl_2026} % Uncomment for the camera-ready ``final'' version.
 % \usepackage[preprint]{corl_2026} % Uncomment for pre-prints (e.g., arxiv); This is like ``final'', but will remove the CORL footnote.
 
-\title{FEMR: Front-End Motion Refinement for Robust Motion Tracking}
+\title{FEMR: Reference Residual Refinement for Robust Motion Tracking}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -61,13 +86,13 @@
 
 	% 任何预训练的底层控制策略都拥有一个隐形的鲁棒性预算. 然而, 如果游参考动作充满伪影，Tracker就会被动耗尽预算去强行维持平衡, 导致其在真实的 Sim-to-Real 部署中变得极其脆弱
 
-	% 为了解决这个问题, 我们在缺陷参考轨迹和冻结的Tracker之间插入了一个轻量级的在线修正模块FrontRES. FrontRES在执行期会输出Delta SE对参考帧进行即时修正.
+	% 为了解决这个问题, 我们在缺陷参考轨迹和冻结的Tracker之间插入了一个轻量级的在线修正模块FrontRES. FrontRES在执行期为每个参考帧输出任务空间残差修正
 
-	% Moreover, 为了防止盲目追求“误差清零”而输出超出动力学承受极限的过度修正，FrontRES 通过“可执行奖励（Executable Reward）”精准学习了底层追踪器的性能边界，确保输出的修正量能抵消噪声的同时不反向破坏Tracker原有的物理执行能力
+	% Moreover, 为避免无约束反噪引入新的参考伪影，FrontRES 预测受限的根节点位姿残差，并通过逐维 repair coefficient 决定哪些修正写入 tracker
 
 	% 实验展示了FrontRES能够提升GMT跟踪带噪参考帧的鲁棒性
 
-	Enabling humanoid robots with 'see-and-do' capability - zero-shot execution of motions from in-the-wild videos - is a central goal in embodied intelligence.However, kinematic sequences extracted from these videos inevitably carry artifacts: floating, jitter, and contact inconsistency. These artifacts drain the tracker's \textit{robustness budget} - its finite capacity to absorb sensing errors and real-world perturbations. When this budget is spent on artifacts, the robot becomes fragile under real-world disturbance. To address this, we propose FEMR (Front-End Motion Refiner), a lightweight module placed between flawed reference and frozen tracker. FEMR predicts per-frame $\Delta SE(3)$ corrections at runtime. Crucially, FEMR is trained with an executable reward that respects the tracker's physical limits, rather than blindly minimizing kinematic error. Experiments demonstrate that FEMR substantially improves tracking robustness against noisy references, enabling stable zero-shot execution.
+	Enabling humanoid robots with 'see-and-do' capability - zero-shot execution of motions from in-the-wild videos - is a central goal in embodied intelligence. However, kinematic sequences extracted from these videos inevitably carry artifacts: floating, jitter, and contact inconsistency. These artifacts drain the tracker's \textit{robustness budget} - its finite capacity to absorb sensing errors and real-world perturbations. When this budget is spent on artifacts, the robot becomes fragile under real-world disturbance. To address this, we propose FEMR (Front-End Motion Refiner), a lightweight module placed between flawed reference and frozen tracker. FEMR predicts bounded root-pose residuals at runtime. Crucially, FEMR writes only selected root-position and root-orientation residuals to the tracker, avoiding unconstrained denoising. Experiments demonstrate that FEMR substantially improves tracking robustness against noisy references, enabling stable zero-shot execution.
 \end{abstract}
 
 % Two or three meaningful keywords should be added here
@@ -152,7 +177,25 @@
 	
 	% 这说明参考帧伪影本身会削弱跟踪器抵抗扰动的能力
 
-	We characterize this mismatch as a \textit{kinematic-to-dynamic gap}: a reference motion can appear natural in pose space yet still be difficult for a physical robot to execute stably. This gap is not merely a qualitative intuition - it directly consumes what we call the \textit{robustness budget} of the tracker. Every low-level controller has a finite capacity to absorb sensing errors, modeling noise, and external perturbations. When reference-frame artifacts already occupy part of that budget, less remains for handling real-world disturbances. A diagnostic experiment (Fig.~\ref{fig:robustness-budget}) confirms this: as root reference noise increases, the robot's post-push stability margin drops monotonically, and the end-to-end success rate of the full motion sequence declines accordingly.
+	We characterize this mismatch as a \textit{kinematic-to-dynamic gap}: a reference motion can appear natural in pose space yet still be difficult for a physical robot to execute stably. This gap is not merely a qualitative intuition - it directly consumes what we call the \textit{robustness budget} of the tracker. Every low-level controller has a finite capacity to absorb sensing errors, modeling noise, and external perturbations. When reference-frame artifacts already occupy part of that budget, less remains for handling real-world disturbances. A diagnostic experiment (Fig.~\ref{fig:robustness_budget}) confirms this: as root reference noise increases, the robot's post-push stability margin drops monotonically, and the end-to-end success rate of the full motion sequence declines accordingly.
+
+	\begin{figure*}[!hbpt]
+		\subfigure[Push Recovery Rate]{
+			\begin{minipage}[t]{0.5\textwidth}
+			\hspace*{-0.35cm}
+			\includegraphics[width=\textwidth]{figure/fig1_recovery_rate.png}
+			\end{minipage}
+		}
+		\subfigure[Minimum ZMP Margin]{
+			\begin{minipage}[t]{0.5\textwidth}
+			\hspace*{-0.35cm}
+			\includegraphics[width=\textwidth]{figure/fig1_zmp_margin.png}
+			\end{minipage}
+		}
+
+		\caption{Recory Rate and ZMP Margin}
+		\label{fig:robustness_budget}
+	\end{figure*}
 	
 	%%%
 	% 第 4 段：提出解决方案应当满足的要求
@@ -196,21 +239,23 @@
 
 	% 为了解决这一问题，我们提出 FEMR，一个放置在缺陷参考动作和冻结运动跟踪器之间的前端运动修正器
 
-	% FEMR 不学习新的底层控制器
+	% FEMR 不学习新的底层控制器，也不修改冻结的 tracker
 
 	% 它只在参考动作进入跟踪器之前进行轻量修正
 
 	% 具体来说，FEMR 在执行时为每个参考帧预测任务空间中的 $\Delta SE(3)$ 修正量
 
-	% 同时，FEMR 预测位置和姿态修正的置信度
+	% 同时，FEMR 预测逐维 repair coefficient，用于决定每个修正维度是否应当被写入参考帧
+
+	% 最终写入 tracker 的修正是 proposal 与 coefficient 的逐维乘积
 
 	% 这种设计使 FEMR 能够控制何时修正、修正哪些维度以及修正幅度
 
 	% 当参考动作已经可执行时，FEMR 应保持输入不变
 
-	% 当参考帧伪影破坏跟踪稳定性时，FEMR 应输出有效修正
+	% 当参考帧伪影破坏跟踪稳定性时，FEMR 应在 action cone 内输出有效修正
 
-	We propose FEMR (Front-End Motion Refiner), a lightweight module inserted between corrupted reference motions and a frozen tracker. FEMR is not a new motion tracker. Instead, it predicts per-frame task-space $\Delta SE(3)$ corrections - residual adjustments to root translation and orientation - gated by separate confidence scores for position and orientation. These confidence scores give FEMR a critical property: it defaults to restraint. When the reference motion is already executable, FEMR keeps the input unchanged. When artifacts threaten stability, FEMR outputs corrections just large enough to restore executability, without overshooting into dynamically infeasible commands. To learn this behavior, FEMR is trained with a tracker-aware executable reward that measures whether a correction actually improves physical execution, rather than merely reducing kinematic error.
+	We propose FEMR (Front-End Motion Refiner), a lightweight module inserted between corrupted reference motions and a frozen tracker. FEMR is not a new motion tracker. Instead, it predicts per-frame residuals for root translation and orientation, together with per-axis repair coefficients. These coefficients give FEMR a critical property: it can write only the dimensions that need repair. When artifacts threaten stability, FEMR applies bounded in-cone corrections rather than unconstrained geometric denoising. To learn this behavior, FEMR is trained to restore noisy references toward clean references after projection into the perturbation-aligned repair cone.
 	
 	%%%
 	% 第 6 段：贡献列表
@@ -224,21 +269,21 @@
 
 	% 我们将视频参考动作中的伪影表述为通用运动追踪中的 Kinematic-to-Dynamic Gap，并从鲁棒性预算的角度分析其影响
 
-	% 我们提出 FEMR，一个在线轻量的前端运动修正器。该方法在保持底层跟踪器冻结的同时，提高缺陷参考动作的可执行性
+	% 我们提出 FEMR，一个在线轻量的前端运动修正器。该方法在保持底层跟踪器冻结的同时，对参考动作的根节点的位置和姿态进行在线残差修正
 
-	% 我们提出 tracker-aware 的可执行性优化项设计，使 FEMR 学习何时保持不变以及何时输出有效修正
+	% 我们提出 perturbation-aligned action cone，将参考帧扰动族与可写入的修复维度对齐，避免 FEMR 在修复目标维度时向无关维度引入新的参考伪影
+
+	% 我们提出 tracker-aware restoration learning，使 FEMR 学习 best possible in-cone correction，而不是无约束地最小化全维度几何误差
 	
 	% 我们通过扰动恢复实验验证了参考帧误差对跟踪稳定性的影响，并展示了 FEMR 对受污染参考动作的修复效果
 
 	In summary, our contributions are:
 
-	\begin{enumerate}
+	\begin{itemize}
 		\item We formulate reference-frame artifacts as a \textit{kinematic-to-dynamic gap} in general motion tracking, and introduce the \textit{robustness budget} to analyze how upstream reference quality governs downstream tracking stability.
-
-		\item We propose FEMR, an online lightweight front-end refiner that keeps the tracker frozen, predicts per-frame task-space corrections gated by confidence scores, and is trained with a tracker-aware executable reward.
-
-		\item Through disturbance recovery experiments, we show that reference-frame noise systematically degrades tracking stability, and that FEMR restores executability without modifying the underlying tracker.
-	\end{enumerate}
+		\item We propose FEMR, an online lightweight front-end refiner that keeps the tracker frozen, predicts bounded root-position and root-orientation residuals with per-axis repair coefficients.
+		\item Through disturbance recovery experiments, we show that reference-frame noise systematically degrades tracking stability, and that FEMR improves robustness by repairing corrupted root references without modifying the underlying tracker.
+	\end{itemize}
 
 %===============================================================================
 
@@ -344,10 +389,284 @@
 
 \section{Method}
 
+\subsection{Reference Residual Refinement}
 
+	% 定义问题：reference artifact 是什么，需要一张真实视频拼图展示问题
 
+	% 1、我们的目标是在不修改底层 GMT tracker 的情况下，修复进入 tracker 之前的参考帧伪影
+	% 2、给定一段参考动作序列，视频重建和重定向过程可能在根节点平移和姿态上引入空间误差
+	% 3、这些误差并不一定破坏单帧姿态的视觉合理性，但会改变支撑关系、接触状态和身体平衡
+	% 4、因此，我们将修复模块放在 reference 和 tracker 之间，而不是放在 tracker 输出端
+	% 5、这种设计把“参考修复”和“底层控制”解耦，使 GMT 保持冻结，只让 FEMR 学习前端残差修正
 
+	% 定义接口：FEMR 放在哪里，输入什么，输出什么，约束项与jump_degree
+
+	% 1、FEMR 接收当前 tracking observation 和参考误差历史，并输出任务空间中的残差修正
+	% 2、具体来说，FEMR 预测一个 6D 修正 proposal，包括根节点平移和姿态修正
+	% 3、同时，FEMR 预测逐维 repair coefficient，用于决定每个维度是否应当被写入参考帧
+	% 4、最终写入 tracker 的修正不是原始输出，而是 proposal 与 coefficient 的逐维乘积
+	%%% 公式 %%%
+	% 5、为避免破坏动力学连续性，我们限制向上的根节点高度修正，并使用 jump gate 抑制不合理的瞬时修复
+
+	% 提一嘴数据清洗流程：egolla
+
+	% 1、训练前我们使用清洗流程移除明显不可执行或存在严重伪影的数据
 	
+	% \begin{equation}
+	% \label{avg_precision}
+	% \centering
+	% \begin{split}
+	
+	% \end{split}
+	% \end{equation}
+
+	% \begin{equation}
+	% \label{avg_precision}
+	% \centering
+	% \begin{split}
+	
+	% \end{split}
+	% \end{equation}
+
+	% \begin{equation}
+	% \label{avg_precision}
+	% \centering
+	% \begin{split}
+	
+	% \end{split}
+	% \end{equation}
+
+	% \begin{equation}
+	% \label{avg_precision}
+	% \centering
+	% \begin{split}
+
+	% \end{split}
+	% \end{equation}
+
+	% \begin{equation}
+	% \label{avg_precision}
+	% \centering
+	% \begin{split}
+
+	% \end{split}
+	% \end{equation}
+
+\subsection{Perturbation-Aligned Repair Space}
+
+	% 解释根据 Observation 我们构造的 Perturbation Family 形态
+
+	% 1、为了系统地学习参考帧修复，我们在干净参考动作上构造可控扰动
+	% 2、扰动被分解为四类：水平位移、航向角、根节点高度、以及局部 roll/pitch 姿态误差
+	% 3、这些扰动覆盖了视频重建和重定向中最常见的空间伪影
+	% 4、我们同时考虑 IID 噪声和 temporally correlated 噪声，以模拟逐帧抖动和连续漂移两类错误
+	% 5、这种扰动族不是任意数据增强，而是对 reference artifact 的结构化建模
+	% 6、它定义了训练中 FEMR 需要面对的问题空间
+
+	% 根据 Perturbation Family 形态设计的 Action Cone
+
+	% 1、扰动空间必须与修复空间对齐
+	% 2、对于每一类扰动，FEMR 只允许在对应的 active repair dimensions 上输出修正
+	% 3、例如，roll/pitch 扰动主要激活姿态修复维度，而不会同时打开无关的水平位移修正
+	% 4、这种 action cone 约束避免了一个常见失败模式：模型为了修复某一维误差，却在其他维度引入新的参考扰动
+	% 5、在监督目标上，我们先从 clean 与 noisy reference 的差值得到 raw restoration target，再将其投影到 repair cone 内
+	% 6、因此，FEMR 学到的不是无约束的几何反噪，而是在 tracker 可接受的修复空间内寻找有效修正
+
+	Therefore what we do is
+
+	\begin{equation}
+	\label{avg_precision}
+	\centering
+	\begin{split}
+	\Delta x_{raw}^{\star} = x_{clean}\ominus x_{noisy},
+	\end{split}
+	\end{equation}
+
+	then we make projection
+
+	\begin{equation}
+	\label{avg_precision}
+	\centering
+	\begin{split}
+	\Delta x^{\star} = \Pi_{\mathcal{C}_{repair}}(\Delta x_{raw}^{\star}),
+	\end{split}
+	\end{equation}
+
+	which including
+
+	\begin{equation}
+	\label{avg_precision}
+	\centering
+	\begin{split}
+	\Delta p_i^\star = \text{clip}(\Delta p_i, -\delta_p, \delta_p),
+	\Delta r_i^\star = \text{clip}(\Delta r_i, -\delta_r, \delta_r),
+	\end{split}
+	\end{equation}
+
+	then multiple active mask
+
+	\begin{equation}
+	\label{avg_precision}
+	\centering
+	\begin{split}
+	\Delta x^\star = m_{\mathcal{A}}\odot \Delta x^\star,
+	\end{split}
+	\end{equation}
+
+\subsection{Tracker-Aware Restoration Learning}
+
+	% 三分支和平滑样本分类
+
+	% 1、训练时，我们并行构造 clean、noisy 和 refined 三个 reference 分支
+	% 2、Clean 分支提供可执行参考的目标状态，noisy 分支刻画伪影对 tracker 的影响，refined 分支用于评估 FEMR 修正后的效果
+	% 3、我们在监督分支中，FEMR 学习将 noisy reference 拉回 clean reference，但该目标会先经过 repair cone 投影和幅度裁剪
+	% 4、因此，监督信号并不是简单地最小化全维度误差，而是学习 best possible in-cone correction
+	% 5、为了减少维度串扰，我们将修正分解为 proposal 和逐维 coefficient
+	% 6、Proposal 学习修复方向，coefficient 学习哪些维度应当被写入 tracker
+
+	% Perturbation Curriculum & Learning Rate Schedule
+
+	% 1、FEMR 的优化目标包含几何恢复项、方向一致性项、幅度约束项、过修正惩罚项和时间平滑项
+	% 2、对逐维 coefficient，我们加入稀疏约束，抑制 inactive dimensions；同时我们加入 miss penalty，防止 active dimensions 被错误关闭；我们还加入时间平滑，减少连续帧抖动
+	% 3、这些项共同约束 FEMR 输出“足够修复但不过度修复”的参考残差
+	% 4、为避免训练早期被高强度扰动冲垮，我们使用 competence-based perturbation curriculum
+	% 5、在训练从单一扰动族和较低强度开始，随后逐步提高扰动强度，并在后期保留平台期
+	% 6、学习率采用 warmup 后余弦退火，使模型先快速进入有效修复区域，再在高扰动阶段稳定收敛
+	% 7、该 schedule 使扰动难度、修复空间和优化速度保持一致，避免模型在尚未学会基础修复时直接面对不可修复样本
+
+	% HSL 损失函数设计
+	Let $u_t\in\mathbb{R}^{6}$ denote the residual proposal predicted by FEMR for root translation and orientation, and let $a_t\in[0,1]^6$ denote the per-axis repair coefficient. The correction written to the tracker is
+	\begin{equation}
+	\label{eq:written-correction}
+	\Delta \hat{x}_t = a_t \odot u_t .
+	\end{equation}
+
+	Given clean and noisy root references $x_t^{c}$ and $x_t^{n}$, we first compute the raw restoration target and project it into the active repair cone,
+	\begin{equation}
+	\label{eq:cone-target}
+	\Delta x_t^\star
+	=
+	\Pi_{\mathcal{C}_t}
+	\left(
+	x_t^{c}\ominus x_t^{n}
+	\right),
+	\qquad
+	\mathcal{C}_t
+	=
+	\mathcal{C}
+	\left(
+	x_t^{n}, \mathcal{P}_t
+	\right),
+	\end{equation}
+	where $\mathcal{P}_t$ is the perturbation family sampled at frame $t$. The cone $\mathcal{C}_t$ encodes which repair directions are valid for the current artifact and state.
+
+	The supervised restoration objective is
+	\begin{equation}
+	\label{eq:supervised-restoration-loss}
+	\begin{split}
+	\mathcal{L}_{\mathrm{restore}}
+	=
+	&\lambda_{\mathrm{pos}}\mathcal{L}_{\mathrm{pos}}
+	+\lambda_{\mathrm{rot}}\mathcal{L}_{\mathrm{rot}}
+	+\lambda_{\mathrm{mag}}\mathcal{L}_{\mathrm{mag}}
+	+\lambda_{\mathrm{over}}\mathcal{L}_{\mathrm{over}}
+	+\lambda_{\mathrm{smooth}}\mathcal{L}_{\mathrm{smooth}} \\
+	&+\lambda_{\mathrm{sparse}}\mathcal{L}_{\mathrm{sparse}}
+	+\lambda_{\mathrm{miss}}\mathcal{L}_{\mathrm{miss}}
+	+\lambda_{\mathrm{coef}}\mathcal{L}_{\mathrm{coef}} .
+	\end{split}
+	\end{equation}
+
+	The main fitting terms are
+	\begin{equation}
+	\label{eq:fitting-loss}
+	\mathcal{L}_{\mathrm{pos}}
+	=
+	\rho
+	\left(
+	\Delta \hat{p}_t-\Delta p_t^\star
+	\right),
+	\qquad
+	\mathcal{L}_{\mathrm{rot}}
+	=
+	\rho
+	\left(
+	\Delta \hat{r}_t-\Delta r_t^\star
+	\right),
+	\end{equation}
+	where $\rho(\cdot)$ is a Huber penalty. To prevent unnecessary or unstable corrections, we use
+	\begin{equation}
+	\label{eq:regularization-loss}
+	\mathcal{L}_{\mathrm{mag}}
+	=
+	\|\Delta \hat{x}_t\|_2^2,
+	\qquad
+	\mathcal{L}_{\mathrm{over}}
+	=
+	\left\|
+	\left[
+	|\Delta \hat{x}_t|-|\Delta x_t^\star|
+	\right]_+
+	\right\|_2^2,
+	\qquad
+	\mathcal{L}_{\mathrm{smooth}}
+	=
+	\|\Delta \hat{x}_t-\Delta \hat{x}_{t-1}\|_2^2 .
+	\end{equation}
+
+	The coefficient losses control which axes are written to the tracker,
+	\begin{equation}
+	\label{eq:coefficient-loss}
+	\mathcal{L}_{\mathrm{sparse}}
+	=
+	\|(1-b_t)\odot a_t\|_1,
+	\qquad
+	\mathcal{L}_{\mathrm{miss}}
+	=
+	\|b_t\odot(1-a_t)\|_1,
+	\qquad
+	\mathcal{L}_{\mathrm{coef}}
+	=
+	\|a_t-a_{t-1}\|_2^2 ,
+	\end{equation}
+	where $b_t=\mathbf{1}(|\Delta x_t^\star|>\epsilon_b)$ is the active target indicator.
+
+	We increase the perturbation difficulty with a competence-based curriculum,
+	\begin{equation}
+	\label{eq:perturbation-curriculum}
+	s(k)
+	=
+	s_{\min}
+	+
+	(s_{\max}-s_{\min})
+	\min
+	\left[
+	1,
+	\left(
+	\frac{k}{K_{\mathrm{ramp}}}
+	\right)^\gamma
+	\right],
+	\end{equation}
+	where $k$ is the training iteration. The schedule reaches $s_{\max}$ before the end of training, leaving a final plateau for high-difficulty stabilization. The learning rate follows warmup and cosine annealing,
+	\begin{equation}
+	\label{eq:cosine-lr}
+	\eta(k)
+	=
+	\begin{cases}
+	\eta_{\max}\dfrac{k}{K_{\mathrm{warm}}}, & k<K_{\mathrm{warm}},\\[6pt]
+	\eta_{\min}
+	+
+	\dfrac{1}{2}(\eta_{\max}-\eta_{\min})
+	\left[
+	1+\cos
+	\left(
+	\pi
+	\dfrac{k-K_{\mathrm{warm}}}{K-K_{\mathrm{warm}}}
+	\right)
+	\right], & k\ge K_{\mathrm{warm}} .
+	\end{cases}
+	\end{equation}
+		
 %===============================================================================
 
 \section{Experiments}
@@ -366,7 +685,7 @@
 
 \clearpage
 % The acknowledgments are automatically included only in the final and preprint versions of the paper.
-\acknowledgments{If a paper is accepted, the final camera-ready version will (and probably should) include acknowledgments. All acknowledgments go at the end of the paper, including thanks to reviewers who gave useful comments, to colleagues who contributed to the ideas, and to funding agencies and corporate sponsors that provided financial support.}
+% \acknowledgments{If a paper is accepted, the final camera-ready version will (and probably should) include acknowledgments. All acknowledgments go at the end of the paper, including thanks to reviewers who gave useful comments, to colleagues who contributed to the ideas, and to funding agencies and corporate sponsors that provided financial support.}
 
 %===============================================================================
 
